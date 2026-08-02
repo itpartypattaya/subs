@@ -1,0 +1,8 @@
+# служебная памятка по серверу — репозиторий публичный
+DEPLOY.local.md
+
+# мусор ОС и редакторов
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
