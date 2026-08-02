@@ -60,6 +60,8 @@
   var SPEED_MIN = 4;       // строк в минуту
   var SPEED_MAX = 120;
   var WHEEL_STEP = 100;    // накопленная дельта колеса на один шаг скорости
+  var SWIPE_STEP = 60;     // то же для свайпа: палец проходит больше, чем щёлкает колесо
+  var TAP_SLOP = 10;       // сдвиг, до которого касание считается тапом, а не свайпом
 
   var settings = {
     text: '',
@@ -80,7 +82,8 @@
     max: 0,
     stops: [],    // позиции меток «||» внутри текста
     nextStop: 0,  // ближайшая метка, которую суфлёр ещё не проехал
-    wheelAcc: 0,  // накопленная дельта колеса (тачпад шлёт десятки мелких событий)
+    wheelAcc: 0,  // накопленная дельта колеса и свайпа (мелких событий приходит много)
+    swipeClick: false, // после свайпа браузерный click глотаем: это не тап-пауза
     atEnd: false, // текст дочитан: клик начинает заново, а не «продолжает» в никуда
     lastFrame: 0,
     raf: 0,
@@ -105,6 +108,11 @@
 
   function systemTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  // устройство без мыши: на нём подсказывать про колесо и Esc бессмысленно
+  function touchOnly() {
+    return !!window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
   }
 
   // пустое settings.ui означает «пользователь тему не выбирал» — тогда каждый
@@ -328,6 +336,12 @@
     measure();
     setTimeout(measure, 60);
     setTimeout(measure, 400);
+
+    // подсказку пересобираем на каждый запуск: устройство может смениться
+    // на ходу — к планшету подключили мышь или наоборот
+    el.keyhelp.textContent = touchOnly()
+      ? 'тап — пауза · свайп — скорость · ✕ — выход'
+      : 'клик — пауза · колесо — скорость · Esc — выход';
 
     // таймер именной: без очистки прогон, запущенный повторно раньше 3.5 с,
     // получал бы погашенную подсказку от предыдущего
@@ -661,7 +675,55 @@
 
   /* ---------- обработчики: экран суфлёра ---------- */
 
-  el.prompter.addEventListener('click', toggle);
+  el.prompter.addEventListener('click', function () {
+    if (run.swipeClick) { run.swipeClick = false; return; } // это был свайп, не тап
+    toggle();
+  });
+
+  /* Свайп — единственный способ менять скорость и мотать текст на планшете
+     и телефоне: колеса и клавиш там нет. Направления повторяют колесо:
+     вверх — быстрее, вниз — медленнее; на паузе палец тащит текст за собой. */
+  var swipe = { active: false, id: null, startY: 0, lastY: 0, moved: false };
+
+  el.prompter.addEventListener('pointerdown', function (e) {
+    if (!run.active) return;
+    run.swipeClick = false;                 // новый жест — чистый лист
+    if (e.target.closest('#exit')) return;  // выход не должен превращаться в свайп
+    swipe.active = true;
+    swipe.id = e.pointerId;
+    swipe.startY = swipe.lastY = e.clientY;
+    swipe.moved = false;
+    run.wheelAcc = 0;
+  });
+
+  // move и up слушаем на окне: палец легко уходит за край, и жест не должен рваться
+  window.addEventListener('pointermove', function (e) {
+    if (!swipe.active || e.pointerId !== swipe.id) return;
+    if (!swipe.moved && Math.abs(e.clientY - swipe.startY) < TAP_SLOP) return;
+    swipe.moved = true;
+
+    var dy = e.clientY - swipe.lastY;
+    swipe.lastY = e.clientY;
+    if (!el.countdown.hidden) return; // во время отсчёта жест не действует
+
+    if (run.playing) {
+      run.wheelAcc += dy; // вверх (dy < 0) — быстрее, как и колесо «от себя»
+      while (run.wheelAcc <= -SWIPE_STEP) { changeSpeed(1); run.wheelAcc += SWIPE_STEP; }
+      while (run.wheelAcc >= SWIPE_STEP) { changeSpeed(-1); run.wheelAcc -= SWIPE_STEP; }
+    } else {
+      scrollBy(-dy); // текст едет за пальцем, как нативная прокрутка
+    }
+  });
+
+  function endSwipe(e) {
+    if (!swipe.active || (e && e.pointerId !== swipe.id)) return;
+    if (swipe.moved) run.swipeClick = true;
+    swipe.active = false;
+    run.wheelAcc = 0;
+  }
+
+  window.addEventListener('pointerup', endSwipe);
+  window.addEventListener('pointercancel', endSwipe);
 
   // единственный выход без клавиатуры: на iPhone нет ни Esc, ни fullscreen-события
   el.exit.addEventListener('click', function (e) {

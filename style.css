@@ -326,6 +326,10 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bo
   cursor: pointer;
   user-select: none;
   overflow: hidden;
+  /* жесты обрабатываем сами: иначе браузер утащит свайп в прокрутку страницы
+     или pull-to-refresh, а долгое нажатие вызовет системное меню */
+  touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 #viewer { position: absolute; inset: 0; overflow: hidden; }
