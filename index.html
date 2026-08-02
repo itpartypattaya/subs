@@ -22,7 +22,8 @@
       <button id="ui-theme" class="ghost" type="button" title="Тема интерфейса"><span id="ui-theme-label">Светлая тема</span></button>
     </div>
 
-    <textarea id="text" placeholder="Вставьте сюда текст выступления…" spellcheck="false"></textarea>
+    <textarea id="text" placeholder="Вставьте сюда текст выступления…" spellcheck="false"
+              aria-label="Текст выступления"></textarea>
 
     <div class="toolbar" id="marks">
       <button type="button" data-mark="|" title="Знак вдоха: прокрутка не останавливается">Вдох&nbsp;<b>|</b></button>
@@ -30,7 +31,7 @@
       <button type="button" id="auto-pauses">Расставить вдохи автоматически</button>
       <button type="button" id="typograf" title="Кавычки-ёлочки, тире, чистка лишних пробелов">Типограф</button>
       <button type="button" id="strip-pauses">Убрать все паузы</button>
-      <span id="tool-note" hidden></span>
+      <span id="tool-note" role="status" aria-live="polite" hidden></span>
     </div>
 
     <div class="statsline">
@@ -64,7 +65,7 @@
 
       <div class="ctl">
         <span class="ctl-head">Экран суфлёра</span>
-        <div class="segmented" id="stage">
+        <div class="segmented" id="stage" role="group" aria-label="Тема экрана суфлёра">
           <button type="button" data-stage="dark" class="on">Тёмный</button>
           <button type="button" data-stage="light">Светлый</button>
           <button type="button" data-stage="yellow">Жёлтый</button>
@@ -73,7 +74,7 @@
 
       <div class="ctl">
         <span class="ctl-head">Выравнивание</span>
-        <div class="segmented" id="align">
+        <div class="segmented" id="align" role="group" aria-label="Выравнивание текста">
           <button type="button" data-align="left" class="on">Слева</button>
           <button type="button" data-align="center">По центру</button>
         </div>
@@ -93,7 +94,7 @@
       <li><b>Клик мыши</b> или <b>пробел</b> — пауза и продолжение</li>
       <li><b>Колесо мыши</b> — скорость (на паузе — перемотка текста)</li>
       <li><b>↑ ↓</b> — скорость · <b>PgUp/PgDn</b> — перемотка · <b>Home</b> — в начало</li>
-      <li><b>Esc</b> — выход в настройки</li>
+      <li><b>Esc</b> или <b>✕</b> в углу — выход в настройки</li>
     </ul>
   </div>
 </main>
@@ -104,8 +105,8 @@
   <div id="marker" aria-hidden="true"><i class="arrow left"></i><i class="line"></i><i class="arrow right"></i></div>
   <div id="progress" aria-hidden="true"><i></i></div>
   <button id="exit" type="button" aria-label="Выход в настройки" title="Выход (Esc)">✕</button>
-  <div id="paused-badge" hidden>пауза</div>
-  <div id="hud" hidden></div>
+  <div id="paused-badge" role="status" aria-live="polite" hidden>пауза</div>
+  <div id="hud" role="status" aria-live="polite" hidden></div>
   <div id="keyhelp">клик — пауза · колесо — скорость · Esc — выход</div>
   <div id="countdown" hidden><span></span></div>
 </section>

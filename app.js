@@ -81,9 +81,11 @@
     stops: [],    // позиции меток «||» внутри текста
     nextStop: 0,  // ближайшая метка, которую суфлёр ещё не проехал
     wheelAcc: 0,  // накопленная дельта колеса (тачпад шлёт десятки мелких событий)
+    atEnd: false, // текст дочитан: клик начинает заново, а не «продолжает» в никуда
     lastFrame: 0,
     raf: 0,
     hudTimer: 0,
+    keyhelpTimer: 0,
     countdownTimer: 0,
     wakeLock: null
   };
@@ -114,9 +116,12 @@
   var saveTimer = 0;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* приватный режим */ }
-    }, 300);
+    saveTimer = setTimeout(writeStore, 300);
+  }
+
+  function writeStore() {
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (e) { /* приватный режим */ }
   }
 
   function fillControls() {
@@ -133,7 +138,9 @@
   function markSegment(group, attr, value) {
     var buttons = group.querySelectorAll('button');
     for (var i = 0; i < buttons.length; i++) {
-      buttons[i].classList.toggle('on', buttons[i].getAttribute('data-' + attr) === value);
+      var on = buttons[i].getAttribute('data-' + attr) === value;
+      buttons[i].classList.toggle('on', on);
+      buttons[i].setAttribute('aria-pressed', on ? 'true' : 'false'); // выбор виден скринридеру
     }
   }
 
@@ -322,8 +329,11 @@
     setTimeout(measure, 60);
     setTimeout(measure, 400);
 
+    // таймер именной: без очистки прогон, запущенный повторно раньше 3.5 с,
+    // получал бы погашенную подсказку от предыдущего
     el.keyhelp.classList.remove('fade');
-    setTimeout(function () { el.keyhelp.classList.add('fade'); }, 3500);
+    clearTimeout(run.keyhelpTimer);
+    run.keyhelpTimer = setTimeout(function () { el.keyhelp.classList.add('fade'); }, 3500);
 
     if (settings.countdown) {
       runCountdown(function () { play(); });
@@ -339,15 +349,18 @@
     el.prompter.hidden = true;
     el.body.classList.remove('running');
     clearTimeout(run.countdownTimer);
+    clearTimeout(run.keyhelpTimer);
     el.countdown.hidden = true;
     releaseWakeLock();
     exitFullscreen();
-    el.resume.hidden = run.pos <= 0;
+    // в конце текста продолжать нечего — предлагаем только запуск сначала
+    el.resume.hidden = run.pos <= 0 || run.pos >= run.max;
   }
 
   function play() {
     if (!run.active) return;
     run.playing = true;
+    run.atEnd = false;
     run.wheelAcc = 0; // остаток дельты прошлого режима не должен дёргать скорость
     el.pausedBadge.hidden = true;
     run.lastFrame = 0;
@@ -355,17 +368,33 @@
     run.raf = requestAnimationFrame(tick);
   }
 
+  var BADGE = {
+    stop: 'остановка · клик — дальше',
+    end: 'конец · клик — сначала'
+  };
+
   function pause(reason) {
     run.playing = false;
     run.wheelAcc = 0;
-    el.pausedBadge.textContent = reason === 'stop' ? 'остановка · клик — дальше' : 'пауза';
+    run.atEnd = reason === 'end';
+    el.pausedBadge.textContent = BADGE[reason] || 'пауза';
     el.pausedBadge.hidden = !run.active;
     cancelAnimationFrame(run.raf);
   }
 
   function toggle() {
     if (!el.countdown.hidden) return; // во время отсчёта клик игнорируем
+    if (run.atEnd) { setPos(0); play(); return; } // в конце клик отматывает к началу
     if (run.playing) pause(); else play();
+  }
+
+  // единственная точка ручного перемещения: клампит, пересобирает ближайшую
+  // метку и снимает признак «дочитано», если уехали от конца
+  function setPos(px) {
+    run.pos = Math.min(run.max, Math.max(0, px));
+    if (run.pos < run.max) run.atEnd = false;
+    syncStopIndex();
+    draw();
   }
 
   function tick(now) {
@@ -402,7 +431,7 @@
     if (run.pos >= run.max) {
       run.pos = run.max;
       draw();
-      pause();
+      pause('end');
       return;
     }
     draw();
@@ -501,9 +530,7 @@
   }
 
   function scrollBy(px) {
-    run.pos = Math.min(run.max, Math.max(0, run.pos + px));
-    syncStopIndex();
-    draw();
+    setPos(run.pos + px);
   }
 
   /* ---------- обработчики: экран настройки ---------- */
@@ -688,15 +715,11 @@
         break;
       case 'Home':
         e.preventDefault();
-        run.pos = 0;
-        syncStopIndex();
-        draw();
+        setPos(0);
         break;
       case 'End':
         e.preventDefault();
-        run.pos = run.max;
-        syncStopIndex();
-        draw();
+        setPos(run.max);
         break;
       default:
         break;
@@ -714,19 +737,31 @@
     if (run.active) measure(); else updateStats();
   });
 
-  // после сворачивания вкладки системная блокировка экрана снимается — берём её заново
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && run.active) requestWakeLock();
+    if (document.visibilityState === 'visible') {
+      // после сворачивания вкладки системная блокировка экрана снимается
+      if (run.active) requestWakeLock();
+    } else {
+      writeStore(); // уход со страницы не должен съедать последние 300 мс ввода
+    }
   });
+
+  // pagehide перехватывает закрытие вкладки там, где visibilitychange не успевает
+  window.addEventListener('pagehide', writeStore);
 
   /* ---------- старт ---------- */
 
   load();
 
-  // границы и геометрия раздаются отсюда — в HTML и CSS их копий нет
+  // границы и геометрия раздаются отсюда — в HTML и CSS их копий нет.
+  // dvh вместо vh: в Safari на iPhone vh считается от экрана без учёта
+  // адресной строки, и отступ трека разъезжался с markerOffset() по
+  // clientHeight — метка вставала мимо визуального маркера.
   el.speed.min = SPEED_MIN;
   el.speed.max = SPEED_MAX;
-  document.documentElement.style.setProperty('--marker', MARKER_RATIO * 100 + 'vh');
+  var vh = (window.CSS && CSS.supports && CSS.supports('height', '100dvh')) ? 'dvh' : 'vh';
+  document.documentElement.style.setProperty('--stage-h', '100' + vh);
+  document.documentElement.style.setProperty('--marker', MARKER_RATIO * 100 + vh);
 
   // пока тема не выбрана явно, интерфейс следует за сменой системной
   if (window.matchMedia) {

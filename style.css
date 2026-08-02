@@ -19,6 +19,10 @@
   --stage-faint: rgba(255, 255, 255, 0.1);
   --stage-veil: rgba(0, 0, 0, 0.65);
   --stage-accent: #4f8cff;
+
+  /* значения по умолчанию: app.js заменит их на dvh, если браузер умеет */
+  --stage-h: 100vh;
+  --marker: 38vh;
 }
 
 /* светлый интерфейс */
@@ -336,7 +340,7 @@ body.mirror #viewer { transform: scaleX(-1); }
   top: 0;
   left: 0;
   right: 0;
-  padding: var(--marker) 6vw calc(100vh - var(--marker));
+  padding: var(--marker) 6vw calc(var(--stage-h) - var(--marker));
   color: var(--stage-ink);
   font-weight: 600;
   text-align: left;
