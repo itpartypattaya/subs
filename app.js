@@ -82,6 +82,9 @@
     max: 0,
     stops: [],    // позиции меток «||» внутри текста
     nextStop: 0,  // ближайшая метка, которую суфлёр ещё не проехал
+    share: 0,     // доля прочитанного (0…1) — она, а не пиксели, переживает
+                  // смену шрифта, ширины колонки и размера окна
+    stageWidth: 0, // фактическая ширина экрана чтения с прошлого прогона
     wheelAcc: 0,  // накопленная дельта колеса и свайпа (мелких событий приходит много)
     swipeClick: false, // после свайпа браузерный click глотаем: это не тап-пауза
     atEnd: false, // текст дочитан: клик начинает заново, а не «продолжает» в никуда
@@ -166,11 +169,10 @@
     el.track.style.paddingRight = (100 - settings.width) / 2 + 'vw';
 
     // измеритель оценки времени вёрстается ровно как трек (кроме вертикальных
-    // отступов: их у него нет, чтобы offsetHeight был чистой высотой текста)
+    // отступов: их у него нет, чтобы offsetHeight был чистой высотой текста).
+    // Ширину и поля ему задаёт estimateSeconds() — по ширине экрана, а не окна
     el.measurer.style.fontSize = settings.size + 'px';
     el.measurer.style.lineHeight = String(LINE_RATIO);
-    el.measurer.style.paddingLeft = (100 - settings.width) / 2 + 'vw';
-    el.measurer.style.paddingRight = (100 - settings.width) / 2 + 'vw';
 
     el.previewText.style.fontSize = settings.size + 'px';
     el.previewText.style.lineHeight = String(LINE_RATIO);
@@ -196,7 +198,7 @@
     el.statWords.textContent = words + ' ' + plural(words, 'слово', 'слова', 'слов');
     el.start.disabled = words === 0;
 
-    el.statTime.textContent = '≈ ' + formatTime(words > 0 ? estimateSeconds() : 0);
+    scheduleEstimate(words > 0);
     el.previewText.textContent = value ? firstLine(value) : 'Пример строки текста';
 
     var marks = countMarks(el.text.value);
@@ -212,15 +214,39 @@
     return line.length > 200 ? line.slice(0, 200) : line;
   }
 
+  // Ширина, на которой текст будет читаться. Окно браузера тут не годится:
+  // суфлёр разворачивается во весь экран, и на неразвёрнутом окне оценка
+  // завышалась. После первого прогона берём измеренную ширину сцены.
+  function stageWidth() {
+    return run.stageWidth || (window.screen && screen.width) || window.innerWidth;
+  }
+
   // Оценка по фактической вёрстке, а не по «средней ширине символа»:
   // текст рендерится в невидимый измеритель с теми же шрифтом, интервалом
   // и шириной колонки, что у трека, и высота делится на скорость прокрутки.
   // Прежняя эвристика занижала время на ~15–20% для жирной кириллицы.
   function estimateSeconds() {
+    var width = stageWidth();
+    var pad = (100 - settings.width) / 200 * width; // те же поля, что у трека, но в px
+    el.measurer.style.width = width + 'px';
+    el.measurer.style.paddingLeft = pad + 'px';
+    el.measurer.style.paddingRight = pad + 'px';
+
     renderText(el.measurer);
     var px = el.measurer.offsetHeight;
     el.measurer.textContent = ''; // копию текста в DOM не держим
     return px / pxPerSecond();
+  }
+
+  // Пересчёт рендерит весь текст, и на длинных выступлениях это десятки
+  // миллисекунд на каждое нажатие клавиши — поэтому с задержкой.
+  var estimateTimer = 0;
+  function scheduleEstimate(hasText) {
+    clearTimeout(estimateTimer);
+    if (!hasText) { el.statTime.textContent = '≈ ' + formatTime(0); return; }
+    estimateTimer = setTimeout(function () {
+      el.statTime.textContent = '≈ ' + formatTime(estimateSeconds());
+    }, 180);
   }
 
   /* ---------- подготовка текста ---------- */
@@ -304,11 +330,20 @@
     while (run.nextStop < run.stops.length && run.stops[run.nextStop] <= line + 1) run.nextStop++;
   }
 
+  // Высота текста меняется от размера шрифта, ширины колонки и поворота экрана,
+  // поэтому место чтения восстанавливаем по доле, а не по пикселям: иначе
+  // «Продолжить» после укрупнения шрифта открывало текст на другом абзаце.
   function measure() {
+    if (!run.active) return; // на скрытом экране мерить нечего: одни нули
     run.max = Math.max(0, el.track.offsetHeight - el.viewer.clientHeight);
-    if (run.pos > run.max) run.pos = run.max;
+    run.pos = Math.min(run.max, run.share * run.max);
+    if (el.viewer.clientWidth > 0) run.stageWidth = el.viewer.clientWidth; // для честной оценки времени
     collectStops();
     draw();
+  }
+
+  function updateShare() {
+    run.share = run.max > 0 ? run.pos / run.max : 0;
   }
 
   function draw() {
@@ -319,14 +354,20 @@
   /* ---------- запуск и остановка ---------- */
 
   function startPrompter(fromStart) {
-    if (!el.text.value.trim()) return;
+    // единственный источник правды о «есть что читать» — та же проверка,
+    // что гасит кнопку: иначе Ctrl+Enter запускал суфлёр на тексте из одних меток
+    if (el.start.disabled) return;
+
+    // фокус остался бы в поле ввода, и случайная буква во время чтения улетала
+    // бы в текст, сбрасывая позицию; заодно пробел не «дожимает» кнопку запуска
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 
     renderText();
     el.prompter.hidden = false;
     el.body.classList.add('running');
     el.pausedBadge.hidden = true;
     run.active = true;
-    if (fromStart) run.pos = 0;
+    if (fromStart) run.share = 0;
 
     requestFullscreen();
     requestWakeLock();
@@ -360,6 +401,7 @@
     if (!run.active) return;
     pause();
     run.active = false;
+    swipe.active = false; // недоведённый жест не должен мотать закрытый суфлёр
     el.prompter.hidden = true;
     el.body.classList.remove('running');
     clearTimeout(run.countdownTimer);
@@ -368,7 +410,9 @@
     releaseWakeLock();
     exitFullscreen();
     // в конце текста продолжать нечего — предлагаем только запуск сначала
-    el.resume.hidden = run.pos <= 0 || run.pos >= run.max;
+    el.resume.hidden = run.share <= 0 || run.share >= 1;
+    el.track.textContent = ''; // копию текста в DOM после выхода не держим
+    updateStats(); // теперь известна настоящая ширина экрана — оценка станет точной
   }
 
   function play() {
@@ -407,6 +451,7 @@
   function setPos(px) {
     run.pos = Math.min(run.max, Math.max(0, px));
     if (run.pos < run.max) run.atEnd = false;
+    updateShare();
     syncStopIndex();
     draw();
   }
@@ -423,7 +468,7 @@
       measure();
       if (run.max <= 0) {
         if (el.track.offsetHeight > 0 && el.viewer.clientHeight > 0) {
-          pause(); // текст короче экрана — прокручивать нечего
+          pause('end'); // текст короче экрана — он и так весь виден
           return;
         }
         run.raf = requestAnimationFrame(tick);
@@ -437,6 +482,7 @@
     if (run.nextStop < run.stops.length && run.pos + markerOffset() >= run.stops[run.nextStop]) {
       run.pos = Math.max(0, run.stops[run.nextStop] - markerOffset());
       run.nextStop += 1;
+      updateShare();
       draw();
       pause('stop');
       return;
@@ -444,10 +490,12 @@
 
     if (run.pos >= run.max) {
       run.pos = run.max;
+      updateShare();
       draw();
       pause('end');
       return;
     }
+    updateShare();
     draw();
     run.raf = requestAnimationFrame(tick);
   }
@@ -455,6 +503,7 @@
   function runCountdown(done) {
     var n = 3;
     var span = el.countdown.querySelector('span');
+    clearTimeout(run.countdownTimer); // повторный запуск не должен плодить цепочки
     el.countdown.hidden = false;
     span.textContent = n;
 
@@ -502,6 +551,7 @@
 
   function requestWakeLock() {
     if (!navigator.wakeLock) return;
+    if (run.wakeLock && !run.wakeLock.released) return; // уже держим
     navigator.wakeLock.request('screen').then(function (lock) {
       run.wakeLock = lock;
     }).catch(function () { /* не поддержано или вкладка неактивна */ });
@@ -566,10 +616,14 @@
   function commitText() {
     if (el.text.value !== settings.text) {
       settings.text = el.text.value;
-      // позиция прошлого прогона в изменённом тексте бессмысленна:
-      // «Продолжить» открыл бы новый текст на случайном месте
-      run.pos = 0;
-      el.resume.hidden = true;
+      // место чтения в изменённом тексте бессмысленно: «Продолжить» открыл бы
+      // новый текст наугад. Во время прогона позицию не трогаем — там на экране
+      // отрисован прежний текст, и прыжок в начало посреди чтения хуже всего
+      if (!run.active) {
+        run.share = 0;
+        run.pos = 0;
+        el.resume.hidden = true;
+      }
     }
     updateStats();
     save();
@@ -698,6 +752,7 @@
 
   // move и up слушаем на окне: палец легко уходит за край, и жест не должен рваться
   window.addEventListener('pointermove', function (e) {
+    if (!run.active) return; // из суфлёра успели выйти, а палец ещё едет
     if (!swipe.active || e.pointerId !== swipe.id) return;
     if (!swipe.moved && Math.abs(e.clientY - swipe.startY) < TAP_SLOP) return;
     swipe.moved = true;

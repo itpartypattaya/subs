@@ -15,7 +15,8 @@
 
 var VERSION = 'v1';
 var CACHE = 'teleprompter-' + VERSION;
-var NETWORK_TIMEOUT = 2500;
+var NETWORK_TIMEOUT = 2500;  // после этого отдаём кэш, если он есть
+var NETWORK_GIVEUP = 15000;  // а после этого прекращаем ждать сеть совсем
 
 var ASSETS = [
   './index.html',
@@ -66,10 +67,12 @@ self.addEventListener('fetch', function (e) {
 function networkFirst(request, key) {
   return new Promise(function (resolve) {
     var done = false;
+    var control = typeof AbortController === 'function' ? new AbortController() : null;
 
     function finish(response) {
       if (done || !response) return;
       done = true;
+      clearTimeout(giveUp);
       resolve(response);
     }
 
@@ -79,7 +82,15 @@ function networkFirst(request, key) {
       caches.match(key).then(finish);
     }, NETWORK_TIMEOUT);
 
-    fetch(request).then(function (response) {
+    // сеть, которая не отвечает и не падает, иначе держала бы вкладку в
+    // бесконечной загрузке: у запроса без ответа в кэше не было бы развязки
+    var giveUp = setTimeout(function () {
+      if (done) return;
+      if (control) control.abort();
+      caches.match(key).then(function (hit) { finish(hit || Response.error()); });
+    }, NETWORK_GIVEUP);
+
+    fetch(request, control ? { signal: control.signal } : undefined).then(function (response) {
       clearTimeout(timer);
       if (response && response.ok && response.type === 'basic') {
         var copy = response.clone();
@@ -93,7 +104,9 @@ function networkFirst(request, key) {
         // для остального — честную ошибку
         if (hit) { finish(hit); return; }
         if (request.mode === 'navigate') {
-          caches.match(cacheKey(self.location.origin + '/index.html')).then(function (index) {
+          // относительно самого воркера, а не корня сайта: приложение может
+          // лежать в подпапке, и тогда /index.html в корне просто нет
+          caches.match(cacheKey(new URL('./index.html', self.location.href).href)).then(function (index) {
             finish(index || Response.error());
           });
           return;

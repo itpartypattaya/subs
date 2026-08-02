@@ -14,12 +14,19 @@
     return many;
   }
 
+  function pad(n) {
+    return (n < 10 ? '0' : '') + n;
+  }
+
   function formatTime(seconds) {
     seconds = Math.round(seconds);
-    var min = Math.floor(seconds / 60);
+    var hours = Math.floor(seconds / 3600);
+    var min = Math.floor((seconds % 3600) / 60);
     var sec = seconds % 60;
+    // «822 мин 10 сек» читалось как поломка, поэтому от часа считаем в часах
+    if (hours > 0) return hours + ' ч ' + pad(min) + ' мин';
     if (min === 0) return sec + ' сек';
-    return min + ' ' + plural(min, 'мин', 'мин', 'мин') + ' ' + (sec < 10 ? '0' : '') + sec + ' сек';
+    return min + ' мин ' + pad(sec) + ' сек';
   }
 
   function speedLabel(value) {
