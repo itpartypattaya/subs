@@ -9,13 +9,18 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230e1013'/%3E%3Cpath d='M7 10h18M7 16h13M7 22h16' stroke='%234f8cff' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-white">
+<body>
 
 <!-- ЭКРАН НАСТРОЙКИ -->
 <main id="setup">
   <div class="wrap">
-    <h1>Телесуфлёр</h1>
-    <p class="sub">Вставьте текст, подберите размер и скорость — и читайте прямо с экрана во время записи.</p>
+    <div class="head">
+      <div>
+        <h1>Телесуфлёр</h1>
+        <p class="sub">Вставьте текст, подберите размер и скорость — и читайте прямо с экрана во время записи.</p>
+      </div>
+      <button id="ui-theme" class="ghost" type="button" title="Тема интерфейса"><span id="ui-theme-label">Светлая тема</span></button>
+    </div>
 
     <textarea id="text" placeholder="Вставьте сюда текст выступления…" spellcheck="false"></textarea>
 
@@ -23,7 +28,9 @@
       <button type="button" data-mark="|" title="Знак вдоха: прокрутка не останавливается">Вдох&nbsp;<b>|</b></button>
       <button type="button" data-mark="||" title="Остановка: суфлёр встанет и подождёт клика">Остановка&nbsp;<b>||</b></button>
       <button type="button" id="auto-pauses">Расставить вдохи автоматически</button>
+      <button type="button" id="typograf" title="Кавычки-ёлочки, тире, чистка лишних пробелов">Типограф</button>
       <button type="button" id="strip-pauses">Убрать все паузы</button>
+      <span id="tool-note" hidden></span>
     </div>
 
     <div class="statsline">
@@ -55,10 +62,11 @@
       </label>
 
       <div class="ctl">
-        <span class="ctl-head">Цвет текста</span>
-        <div class="segmented" id="theme">
-          <button type="button" data-theme="white" class="on">Белый</button>
-          <button type="button" data-theme="yellow">Жёлтый</button>
+        <span class="ctl-head">Экран суфлёра</span>
+        <div class="segmented" id="stage">
+          <button type="button" data-stage="dark" class="on">Тёмный</button>
+          <button type="button" data-stage="light">Светлый</button>
+          <button type="button" data-stage="yellow">Жёлтый</button>
         </div>
       </div>
 

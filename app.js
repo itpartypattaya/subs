@@ -14,7 +14,11 @@
     clear: document.getElementById('clear'),
     marks: document.getElementById('marks'),
     autoPauses: document.getElementById('auto-pauses'),
+    typograf: document.getElementById('typograf'),
     stripPauses: document.getElementById('strip-pauses'),
+    toolNote: document.getElementById('tool-note'),
+    uiTheme: document.getElementById('ui-theme'),
+    uiThemeLabel: document.getElementById('ui-theme-label'),
     previewStrip: document.getElementById('preview-strip'),
     previewText: document.getElementById('preview-text'),
     size: document.getElementById('size'),
@@ -23,7 +27,7 @@
     valSize: document.getElementById('val-size'),
     valSpeed: document.getElementById('val-speed'),
     valWidth: document.getElementById('val-width'),
-    theme: document.getElementById('theme'),
+    stage: document.getElementById('stage'),
     align: document.getElementById('align'),
     mirror: document.getElementById('mirror'),
     countdownOn: document.getElementById('countdown-on'),
@@ -45,9 +49,10 @@
   var settings = {
     text: '',
     size: 64,
-    speed: 18,   // строк в минуту
-    width: 70,   // % ширины экрана
-    theme: 'white',
+    speed: 18,     // строк в минуту
+    width: 70,     // % ширины экрана
+    stage: 'dark', // экран суфлёра: dark | light | yellow
+    ui: '',        // интерфейс: dark | light, пусто — взять системную
     align: 'left',
     mirror: false,
     countdown: true
@@ -75,7 +80,15 @@
       Object.keys(settings).forEach(function (k) {
         if (saved[k] !== undefined && saved[k] !== null) settings[k] = saved[k];
       });
+      // до появления светлой темы вариант назывался theme: white | yellow
+      if (saved.theme && !saved.stage) settings.stage = saved.theme === 'yellow' ? 'yellow' : 'dark';
     } catch (e) { /* повреждённое хранилище — просто берём значения по умолчанию */ }
+
+    if (settings.ui !== 'dark' && settings.ui !== 'light') settings.ui = systemTheme();
+  }
+
+  function systemTheme() {
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
   }
 
   var saveTimer = 0;
@@ -93,7 +106,7 @@
     el.width.value = settings.width;
     el.mirror.checked = settings.mirror;
     el.countdownOn.checked = settings.countdown;
-    markSegment(el.theme, 'theme', settings.theme);
+    markSegment(el.stage, 'stage', settings.stage);
     markSegment(el.align, 'align', settings.align);
   }
 
@@ -105,10 +118,12 @@
   }
 
   function applySettings() {
-    el.body.classList.toggle('theme-yellow', settings.theme === 'yellow');
-    el.body.classList.toggle('theme-white', settings.theme !== 'yellow');
+    el.body.classList.toggle('stage-light', settings.stage === 'light');
+    el.body.classList.toggle('stage-yellow', settings.stage === 'yellow');
+    el.body.classList.toggle('ui-light', settings.ui === 'light');
     el.body.classList.toggle('align-center', settings.align === 'center');
     el.body.classList.toggle('mirror', settings.mirror);
+    el.uiThemeLabel.textContent = settings.ui === 'light' ? 'Тёмная тема' : 'Светлая тема';
 
     el.track.style.fontSize = settings.size + 'px';
     el.track.style.paddingLeft = (100 - settings.width) / 2 + 'vw';
@@ -518,12 +533,43 @@
     commitText();
   }
 
+  // сокращения и инициалы, после которых точка не кончает предложение
+  var ABBR = /^(?:т|д|е|п|г|гг|в|вв|см|стр|рис|табл|руб|коп|тыс|млн|млрд|им|др|пр|ул|кв|обл|тел|мин|сек|ч|кг|км|шт|проф|доц|акад)$/i;
+
   // черновая разметка по концам предложений: дальше человек правит руками,
-  // это дешевле, чем размечать пятиминутный текст с нуля
+  // это дешевле, чем размечать пятиминутный текст с нуля.
+  // Пробел ищем как [^\S\n]: из Word и с веб-страниц текст приходит
+  // с неразрывными пробелами, и на них разметка молча не срабатывала.
   function autoPauses(value) {
     return value.split('\n').map(function (line) {
-      return line.replace(/([.!?…])([ \t]+)(?=[^\s|])/g, '$1 | ');
+      return line.replace(/([^\s.!?…]*)([.!?…]+[»"')\]]*)([^\S\n]+)(?=[^\s|])/g, function (all, word, punct) {
+        if (word.length <= 1 || ABBR.test(word)) return all; // инициал или сокращение
+        return word + punct + ' | ';
+      });
     }).join('\n');
+  }
+
+  // короткие слова, которые не должны отрываться от следующего слова
+  var SHORT_WORDS = 'а|и|но|да|же|ли|бы|не|ни|в|во|к|ко|с|со|о|об|обо|от|ото|до|из|изо|у|за|на|по|над|под|про|при|для|без|через|что|как|это';
+
+  var NBSP = '\u00A0'; // неразрывный пробел
+
+  function typograf(value) {
+    return value
+      .replace(/\r/g, '')
+      .replace(/[\u00A0\u202F\u2007\u2009]/g, ' ')  // пробелы из Word — к обычным
+      .replace(/[ \t]{2,}/g, ' ')                            // двойные пробелы
+      .replace(/[ \t]+([,;:.!?…])/g, '$1')                   // пробел перед знаком препинания
+      .replace(/\.{3,}/g, '…')                               // многоточие одним знаком
+      .replace(/(^|[\s(])-{1,2}(\s)/g, '$1—$2')              // дефис в роли тире
+      .replace(/"([^"\n]+)"/g, '«$1»')                       // кавычки-ёлочки
+      .replace(/(^|[\s(«])'([^'\n]+)'/g, '$1„$2“')
+      .replace(/([(«])[ \t]+/g, '$1')                        // пробел после открывающей скобки
+      .replace(/[ \t]+([)»])/g, '$1')
+      .replace(new RegExp('(^|[\\s(«„])(' + SHORT_WORDS + ') ', 'gi'), '$1$2' + NBSP)
+      .replace(/[ \t]+$/gm, '')                              // хвосты строк
+      .replace(/\n{3,}/g, '\n\n')                            // лишние пустые строки
+      .trim();
   }
 
   function commitText() {
@@ -537,9 +583,30 @@
     if (button) insertMark(button.getAttribute('data-mark'));
   });
 
+  // без ответа кнопка выглядит сломанной, когда менять в тексте нечего
+  var noteTimer = 0;
+  function showNote(message) {
+    el.toolNote.textContent = message;
+    el.toolNote.hidden = false;
+    clearTimeout(noteTimer);
+    noteTimer = setTimeout(function () { el.toolNote.hidden = true; }, 3500);
+  }
+
   el.autoPauses.addEventListener('click', function () {
+    var before = countMarks(el.text.value).breaths;
     el.text.value = autoPauses(el.text.value);
     commitText();
+    var added = countMarks(el.text.value).breaths - before;
+    showNote(added > 0
+      ? 'расставлено ' + added + ' ' + plural(added, 'вдох', 'вдоха', 'вдохов')
+      : 'подходящих мест не нашлось — вдохи ставятся после точки внутри абзаца');
+  });
+
+  el.typograf.addEventListener('click', function () {
+    var before = el.text.value;
+    el.text.value = typograf(before);
+    commitText();
+    showNote(el.text.value === before ? 'текст уже в порядке' : 'текст причёсан');
   });
 
   el.stripPauses.addEventListener('click', function () {
@@ -568,11 +635,17 @@
     });
   });
 
-  el.theme.addEventListener('click', function (e) {
-    var button = e.target.closest('button[data-theme]');
+  el.stage.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-stage]');
     if (!button) return;
-    settings.theme = button.getAttribute('data-theme');
-    markSegment(el.theme, 'theme', settings.theme);
+    settings.stage = button.getAttribute('data-stage');
+    markSegment(el.stage, 'stage', settings.stage);
+    applySettings();
+    save();
+  });
+
+  el.uiTheme.addEventListener('click', function () {
+    settings.ui = settings.ui === 'light' ? 'dark' : 'light';
     applySettings();
     save();
   });
