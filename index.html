@@ -19,9 +19,17 @@
 
     <textarea id="text" placeholder="Вставьте сюда текст выступления…" spellcheck="false"></textarea>
 
+    <div class="toolbar" id="marks">
+      <button type="button" data-mark="|" title="Знак вдоха: прокрутка не останавливается">Вдох&nbsp;<b>|</b></button>
+      <button type="button" data-mark="||" title="Остановка: суфлёр встанет и подождёт клика">Остановка&nbsp;<b>||</b></button>
+      <button type="button" id="auto-pauses">Расставить вдохи автоматически</button>
+      <button type="button" id="strip-pauses">Убрать все паузы</button>
+    </div>
+
     <div class="statsline">
       <span id="stat-words">0 слов</span>
       <span id="stat-time">≈ 0 сек</span>
+      <span id="stat-pauses" hidden></span>
       <button id="clear" class="link" type="button">Очистить</button>
     </div>
 
@@ -72,6 +80,7 @@
     <button id="resume" class="secondary" type="button" hidden>Продолжить с места остановки</button>
 
     <ul class="legend">
+      <li><b>|</b> в тексте — знак вдоха, прокрутка идёт дальше · <b>||</b> — остановка до клика</li>
       <li><b>Клик мыши</b> или <b>пробел</b> — пауза и продолжение</li>
       <li><b>Колесо мыши</b> — скорость (на паузе — перемотка текста)</li>
       <li><b>↑ ↓</b> — скорость · <b>PgUp/PgDn</b> — перемотка · <b>Home</b> — в начало</li>

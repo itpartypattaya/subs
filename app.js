@@ -10,7 +10,11 @@
     text: document.getElementById('text'),
     statWords: document.getElementById('stat-words'),
     statTime: document.getElementById('stat-time'),
+    statPauses: document.getElementById('stat-pauses'),
     clear: document.getElementById('clear'),
+    marks: document.getElementById('marks'),
+    autoPauses: document.getElementById('auto-pauses'),
+    stripPauses: document.getElementById('strip-pauses'),
     previewStrip: document.getElementById('preview-strip'),
     previewText: document.getElementById('preview-text'),
     size: document.getElementById('size'),
@@ -35,7 +39,8 @@
     countdown: document.getElementById('countdown')
   };
 
-  var LINE_RATIO = 1.4; // должно совпадать с line-height в style.css
+  var LINE_RATIO = 1.4;    // должно совпадать с line-height блока #track в style.css
+  var MARKER_RATIO = 0.38; // должно совпадать с top у #marker и padding-top у #track
 
   var settings = {
     text: '',
@@ -53,6 +58,8 @@
     playing: false,
     pos: 0,
     max: 0,
+    stops: [],    // позиции меток «||» внутри текста
+    nextStop: 0,  // ближайшая метка, которую суфлёр ещё не проехал
     lastFrame: 0,
     raf: 0,
     hudTimer: 0,
@@ -124,8 +131,18 @@
     return settings.speed * settings.size * LINE_RATIO / 60;
   }
 
+  function stripMarks(value) {
+    return value.replace(/\|\|?/g, ' ');
+  }
+
+  function countMarks(value) {
+    var stops = (value.match(/\|\|/g) || []).length;
+    var breaths = (value.replace(/\|\|/g, '').match(/\|/g) || []).length;
+    return { stops: stops, breaths: breaths };
+  }
+
   function updateStats() {
-    var value = el.text.value.trim();
+    var value = stripMarks(el.text.value).trim();
     var words = value ? value.split(/\s+/).length : 0;
     el.statWords.textContent = words + ' ' + plural(words, 'слово', 'слова', 'слов');
     el.start.disabled = words === 0;
@@ -139,6 +156,13 @@
     }
     el.statTime.textContent = '≈ ' + formatTime(seconds);
     el.previewText.textContent = value ? firstLine(value) : 'Пример строки текста';
+
+    var marks = countMarks(el.text.value);
+    var parts = [];
+    if (marks.breaths) parts.push(marks.breaths + ' ' + plural(marks.breaths, 'вдох', 'вдоха', 'вдохов'));
+    if (marks.stops) parts.push(marks.stops + ' ' + plural(marks.stops, 'остановка', 'остановки', 'остановок'));
+    el.statPauses.textContent = parts.join(' · ');
+    el.statPauses.hidden = parts.length === 0;
   }
 
   function firstLine(value) {
@@ -185,10 +209,7 @@
     var paragraphs = el.text.value.replace(/\r/g, '').split(/\n{2,}/);
     for (var i = 0; i < paragraphs.length; i++) {
       var block = paragraphs[i].trim();
-      if (!block) continue;
-      var p = document.createElement('p');
-      p.textContent = block;
-      el.track.appendChild(p);
+      if (block) renderBlock(block);
     }
     if (!el.track.childNodes.length) {
       var empty = document.createElement('p');
@@ -197,9 +218,72 @@
     }
   }
 
+  // «|» — вдох: знак в строке, прокрутка не прерывается.
+  // «||» — остановка: отдельная полоса, на ней суфлёр встаёт и ждёт человека.
+  function renderBlock(block) {
+    var parts = block.split(/(\|\|?)/);
+    var nodes = [];
+
+    function flushParagraph() {
+      trimEdge(nodes[0], 'start');
+      trimEdge(nodes[nodes.length - 1], 'end');
+      var p = document.createElement('p');
+      for (var n = 0; n < nodes.length; n++) p.appendChild(nodes[n]);
+      nodes = [];
+      if (p.textContent.trim()) el.track.appendChild(p);
+    }
+
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i];
+      if (part === '||') {
+        flushParagraph();
+        var stop = document.createElement('div');
+        stop.className = 'stop';
+        stop.appendChild(document.createElement('i'));
+        el.track.appendChild(stop);
+      } else if (part === '|') {
+        var breath = document.createElement('span');
+        breath.className = 'breath';
+        breath.textContent = '|';
+        nodes.push(breath);
+      } else if (part) {
+        nodes.push(document.createTextNode(part));
+      }
+    }
+    flushParagraph();
+  }
+
+  // текст рисуется с pre-wrap, поэтому пробелы у краёв абзаца пришлось бы видно
+  function trimEdge(node, side) {
+    if (!node || node.nodeType !== 3) return;
+    node.nodeValue = side === 'start'
+      ? node.nodeValue.replace(/^\s+/, '')
+      : node.nodeValue.replace(/\s+$/, '');
+  }
+
+  function markerOffset() {
+    return el.viewer.clientHeight * MARKER_RATIO;
+  }
+
+  function collectStops() {
+    run.stops = [];
+    var list = el.track.querySelectorAll('.stop');
+    for (var i = 0; i < list.length; i++) run.stops.push(list[i].offsetTop);
+    syncStopIndex();
+  }
+
+  // после ручной перемотки ближайшая метка другая — иначе суфлёр
+  // либо встанет на уже пройденной, либо проедет мимо непройденной
+  function syncStopIndex() {
+    var line = run.pos + markerOffset();
+    run.nextStop = 0;
+    while (run.nextStop < run.stops.length && run.stops[run.nextStop] <= line + 1) run.nextStop++;
+  }
+
   function measure() {
     run.max = Math.max(0, el.track.offsetHeight - el.viewer.clientHeight);
     if (run.pos > run.max) run.pos = run.max;
+    collectStops();
     draw();
   }
 
@@ -261,8 +345,9 @@
     run.raf = requestAnimationFrame(tick);
   }
 
-  function pause() {
+  function pause(reason) {
     run.playing = false;
+    el.pausedBadge.textContent = reason === 'stop' ? 'остановка · клик — дальше' : 'пауза';
     el.pausedBadge.hidden = !run.active;
     cancelAnimationFrame(run.raf);
   }
@@ -293,6 +378,16 @@
     }
 
     run.pos += pxPerSecond() * dt;
+
+    // метка «||» доехала до маркера — встаём ровно на ней и ждём человека
+    if (run.nextStop < run.stops.length && run.pos + markerOffset() >= run.stops[run.nextStop]) {
+      run.pos = Math.max(0, run.stops[run.nextStop] - markerOffset());
+      run.nextStop += 1;
+      draw();
+      pause('stop');
+      return;
+    }
+
     if (run.pos >= run.max) {
       run.pos = run.max;
       draw();
@@ -399,6 +494,7 @@
 
   function scrollBy(px) {
     run.pos = Math.min(run.max, Math.max(0, run.pos + px));
+    syncStopIndex();
     draw();
   }
 
@@ -408,6 +504,50 @@
     settings.text = el.text.value;
     updateStats();
     save();
+  });
+
+  // вставка метки в позицию курсора — чтобы не держать синтаксис в голове
+  function insertMark(mark) {
+    var ta = el.text;
+    var before = ta.value.slice(0, ta.selectionStart).replace(/[ \t]+$/, '');
+    var after = ta.value.slice(ta.selectionEnd).replace(/^[ \t]+/, '');
+    var head = before + (before && !/\n$/.test(before) ? ' ' : '') + mark + ' ';
+    ta.value = head + after;
+    ta.setSelectionRange(head.length, head.length);
+    ta.focus();
+    commitText();
+  }
+
+  // черновая разметка по концам предложений: дальше человек правит руками,
+  // это дешевле, чем размечать пятиминутный текст с нуля
+  function autoPauses(value) {
+    return value.split('\n').map(function (line) {
+      return line.replace(/([.!?…])([ \t]+)(?=[^\s|])/g, '$1 | ');
+    }).join('\n');
+  }
+
+  function commitText() {
+    settings.text = el.text.value;
+    updateStats();
+    save();
+  }
+
+  el.marks.addEventListener('click', function (e) {
+    var button = e.target.closest('button[data-mark]');
+    if (button) insertMark(button.getAttribute('data-mark'));
+  });
+
+  el.autoPauses.addEventListener('click', function () {
+    el.text.value = autoPauses(el.text.value);
+    commitText();
+  });
+
+  el.stripPauses.addEventListener('click', function () {
+    el.text.value = el.text.value
+      .replace(/[ \t]*\|\|?[ \t]*/g, ' ')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/^[ \t]+/gm, '');
+    commitText();
   });
 
   el.clear.addEventListener('click', function () {
@@ -511,11 +651,13 @@
       case 'Home':
         e.preventDefault();
         run.pos = 0;
+        syncStopIndex();
         draw();
         break;
       case 'End':
         e.preventDefault();
         run.pos = run.max;
+        syncStopIndex();
         draw();
         break;
       default:

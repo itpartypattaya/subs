@@ -62,14 +62,36 @@ h1 {
 #text:focus { border-color: var(--accent); }
 #text::placeholder { color: #5d6575; }
 
+/* Инструменты разметки пауз */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.toolbar button {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.toolbar button:hover { border-color: var(--accent); color: var(--ink); }
+.toolbar button b { color: var(--accent); font-weight: 700; }
+
 .statsline {
   display: flex;
   align-items: center;
   gap: 18px;
-  margin: 10px 2px 22px;
+  margin: 14px 2px 22px;
   color: var(--muted);
   font-size: 14px;
 }
+.statsline #stat-pauses { color: var(--accent); }
 .statsline #stat-time { color: var(--ink); }
 
 .link {
@@ -268,6 +290,41 @@ body.theme-yellow #track { color: #ffd24a; }
 body.align-center #track { text-align: center; }
 
 #track > p { margin: 0 0 0.7em; }
+
+/* Знак вдоха: заметен боковым зрением, но не разрывает строку */
+#track .breath {
+  margin: 0 0.14em;
+  color: var(--accent);
+  opacity: 0.75;
+  font-weight: 400;
+}
+body.theme-yellow #track .breath { color: #7fb0ff; }
+
+/* Остановка: полоса поперёк колонки со знаком паузы посередине */
+#track .stop {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin: 0.45em 0 0.75em;
+  color: var(--accent);
+  opacity: 0.75;
+}
+#track .stop::before,
+#track .stop::after {
+  content: '';
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.45;
+}
+#track .stop i {
+  flex: none;
+  width: 0.34em;
+  height: 0.62em;
+  border-left: 0.15em solid currentColor;
+  border-right: 0.15em solid currentColor;
+}
 
 /* Маркер строки */
 #marker {
