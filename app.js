@@ -775,4 +775,12 @@
 
   fillControls();
   applySettings();
+
+  // офлайн-режим; с file:// и без https воркер недоступен — тогда просто
+  // работаем как обычная страница, приложение от него не зависит
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () { /* приватный режим или запрет политики */ });
+    });
+  }
 })();
