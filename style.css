@@ -188,13 +188,12 @@ h1 {
   overflow: hidden;
   padding: 0 16px;
 }
+/* font-size и line-height проставляет app.js — те же, что у трека */
 #preview-text {
   width: 70%;
   margin: 0 auto;
   color: var(--stage-ink);
   font-weight: 600;
-  font-size: 64px;
-  line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -328,16 +327,18 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bo
 #viewer { position: absolute; inset: 0; overflow: hidden; }
 body.mirror #viewer { transform: scaleX(-1); }
 
+/* --marker задаёт app.js (MARKER_RATIO). Отступы трека в сумме всегда 100vh:
+   благодаря этому позиция любой метки «||» не превышает максимум прокрутки —
+   остановка у самого конца текста гарантированно доезжает до маркера.
+   font-size и line-height тоже проставляет app.js. */
 #track {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  padding: 38vh 6vw 62vh;
+  padding: var(--marker) 6vw calc(100vh - var(--marker));
   color: var(--stage-ink);
   font-weight: 600;
-  font-size: 64px;
-  line-height: 1.4;
   text-align: left;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -384,7 +385,7 @@ body.align-center #track { text-align: center; }
 /* Маркер строки */
 #marker {
   position: absolute;
-  top: 38vh;
+  top: var(--marker);
   left: 0;
   right: 0;
   display: flex;
@@ -414,6 +415,24 @@ body.align-center #track { text-align: center; }
   pointer-events: none;
 }
 #progress i { display: block; width: 0; height: 100%; background: var(--stage-soft); }
+
+/* выход мышью и пальцем: на iPhone нет ни Esc, ни выхода из fullscreen */
+#exit {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--stage-faint);
+  color: var(--stage-soft);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+}
+#exit:hover { opacity: 1; }
 
 #paused-badge {
   position: absolute;

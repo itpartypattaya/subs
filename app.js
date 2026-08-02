@@ -34,6 +34,7 @@
     start: document.getElementById('start'),
     resume: document.getElementById('resume'),
     prompter: document.getElementById('prompter'),
+    exit: document.getElementById('exit'),
     viewer: document.getElementById('viewer'),
     track: document.getElementById('track'),
     progress: document.querySelector('#progress i'),
@@ -43,8 +44,14 @@
     countdown: document.getElementById('countdown')
   };
 
-  var LINE_RATIO = 1.4;    // должно совпадать с line-height блока #track в style.css
-  var MARKER_RATIO = 0.38; // должно совпадать с top у #marker и padding-top у #track
+  // Единственный источник чисел, которые раньше дублировались в HTML и CSS:
+  // applySettings() раздаёт LINE_RATIO треку и предпросмотру, init проставляет
+  // границы слайдера скорости и CSS-переменную --marker. Двойников больше нет.
+  var LINE_RATIO = 1.4;    // межстрочный интервал текста суфлёра
+  var MARKER_RATIO = 0.38; // маркер и первая строка текста — на 38% высоты экрана
+  var SPEED_MIN = 4;       // строк в минуту
+  var SPEED_MAX = 120;
+  var WHEEL_STEP = 100;    // накопленная дельта колеса на один шаг скорости
 
   var settings = {
     text: '',
@@ -65,6 +72,7 @@
     max: 0,
     stops: [],    // позиции меток «||» внутри текста
     nextStop: 0,  // ближайшая метка, которую суфлёр ещё не проехал
+    wheelAcc: 0,  // накопленная дельта колеса (тачпад шлёт десятки мелких событий)
     lastFrame: 0,
     raf: 0,
     hudTimer: 0,
@@ -83,12 +91,16 @@
       // до появления светлой темы вариант назывался theme: white | yellow
       if (saved.theme && !saved.stage) settings.stage = saved.theme === 'yellow' ? 'yellow' : 'dark';
     } catch (e) { /* повреждённое хранилище — просто берём значения по умолчанию */ }
-
-    if (settings.ui !== 'dark' && settings.ui !== 'light') settings.ui = systemTheme();
   }
 
   function systemTheme() {
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+
+  // пустое settings.ui означает «пользователь тему не выбирал» — тогда каждый
+  // раз берём актуальную системную, а не замораживаем её при первом визите
+  function currentUi() {
+    return settings.ui === 'light' || settings.ui === 'dark' ? settings.ui : systemTheme();
   }
 
   var saveTimer = 0;
@@ -120,16 +132,18 @@
   function applySettings() {
     el.body.classList.toggle('stage-light', settings.stage === 'light');
     el.body.classList.toggle('stage-yellow', settings.stage === 'yellow');
-    el.body.classList.toggle('ui-light', settings.ui === 'light');
+    el.body.classList.toggle('ui-light', currentUi() === 'light');
     el.body.classList.toggle('align-center', settings.align === 'center');
     el.body.classList.toggle('mirror', settings.mirror);
-    el.uiThemeLabel.textContent = settings.ui === 'light' ? 'Тёмная тема' : 'Светлая тема';
+    el.uiThemeLabel.textContent = currentUi() === 'light' ? 'Тёмная тема' : 'Светлая тема';
 
     el.track.style.fontSize = settings.size + 'px';
+    el.track.style.lineHeight = String(LINE_RATIO);
     el.track.style.paddingLeft = (100 - settings.width) / 2 + 'vw';
     el.track.style.paddingRight = (100 - settings.width) / 2 + 'vw';
 
     el.previewText.style.fontSize = settings.size + 'px';
+    el.previewText.style.lineHeight = String(LINE_RATIO);
     el.previewText.style.width = settings.width + '%';
     el.previewText.style.textAlign = settings.align;
 
@@ -354,6 +368,7 @@
   function play() {
     if (!run.active) return;
     run.playing = true;
+    run.wheelAcc = 0; // остаток дельты прошлого режима не должен дёргать скорость
     el.pausedBadge.hidden = true;
     run.lastFrame = 0;
     cancelAnimationFrame(run.raf);
@@ -362,6 +377,7 @@
 
   function pause(reason) {
     run.playing = false;
+    run.wheelAcc = 0;
     el.pausedBadge.textContent = reason === 'stop' ? 'остановка · клик — дальше' : 'пауза';
     el.pausedBadge.hidden = !run.active;
     cancelAnimationFrame(run.raf);
@@ -485,9 +501,6 @@
     run.hudTimer = setTimeout(function () { el.hud.classList.add('fade'); }, 1100);
   }
 
-  var SPEED_MIN = 4;
-  var SPEED_MAX = 120;
-
   // на медленных скоростях важна точность, на быстрых — быстрый разгон,
   // иначе от рабочих 18 до потолка пришлось бы крутить колесо сотню раз
   function speedStep(value) {
@@ -515,11 +528,7 @@
 
   /* ---------- обработчики: экран настройки ---------- */
 
-  el.text.addEventListener('input', function () {
-    settings.text = el.text.value;
-    updateStats();
-    save();
-  });
+  el.text.addEventListener('input', commitText);
 
   // вставка метки в позицию курсора — чтобы не держать синтаксис в голове
   function insertMark(mark) {
@@ -573,7 +582,13 @@
   }
 
   function commitText() {
-    settings.text = el.text.value;
+    if (el.text.value !== settings.text) {
+      settings.text = el.text.value;
+      // позиция прошлого прогона в изменённом тексте бессмысленна:
+      // «Продолжить» открыл бы новый текст на случайном месте
+      run.pos = 0;
+      el.resume.hidden = true;
+    }
     updateStats();
     save();
   }
@@ -619,11 +634,7 @@
 
   el.clear.addEventListener('click', function () {
     el.text.value = '';
-    settings.text = '';
-    run.pos = 0;
-    el.resume.hidden = true;
-    updateStats();
-    save();
+    commitText();
     el.text.focus();
   });
 
@@ -645,7 +656,7 @@
   });
 
   el.uiTheme.addEventListener('click', function () {
-    settings.ui = settings.ui === 'light' ? 'dark' : 'light';
+    settings.ui = currentUi() === 'light' ? 'dark' : 'light';
     applySettings();
     save();
   });
@@ -684,12 +695,25 @@
 
   el.prompter.addEventListener('click', toggle);
 
+  // единственный выход без клавиатуры: на iPhone нет ни Esc, ни fullscreen-события
+  el.exit.addEventListener('click', function (e) {
+    e.stopPropagation(); // иначе клик долетит до prompter и снимет паузу
+    stopPrompter();
+  });
+
+  // Один шаг скорости на WHEEL_STEP накопленных пикселей: колесо с щелчками
+  // даёт ~100 px за щелчок (шаг за щелчок), а тачпад шлёт десятки мелких
+  // событий с инерцией — без накопления скорость слетала от 18 к 120 за жест.
   el.prompter.addEventListener('wheel', function (e) {
     e.preventDefault();
+    if (!el.countdown.hidden) return; // во время отсчёта колесо не трогаем
+    var delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; // режим «строки» (Firefox) — к пикселям
     if (run.playing) {
-      changeSpeed(e.deltaY < 0 ? 1 : -1);
+      run.wheelAcc += delta;
+      while (run.wheelAcc <= -WHEEL_STEP) { changeSpeed(1); run.wheelAcc += WHEEL_STEP; }
+      while (run.wheelAcc >= WHEEL_STEP) { changeSpeed(-1); run.wheelAcc -= WHEEL_STEP; }
     } else {
-      scrollBy(e.deltaY);
+      scrollBy(delta);
     }
   }, { passive: false });
 
@@ -757,6 +781,22 @@
   /* ---------- старт ---------- */
 
   load();
+
+  // границы и геометрия раздаются отсюда — в HTML и CSS их копий нет
+  el.speed.min = SPEED_MIN;
+  el.speed.max = SPEED_MAX;
+  document.documentElement.style.setProperty('--marker', MARKER_RATIO * 100 + 'vh');
+
+  // пока тема не выбрана явно, интерфейс следует за сменой системной
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: light)');
+    if (mq.addEventListener) {
+      mq.addEventListener('change', function () {
+        if (!settings.ui) applySettings();
+      });
+    }
+  }
+
   fillControls();
   applySettings();
 })();

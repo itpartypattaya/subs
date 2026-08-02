@@ -53,7 +53,8 @@
 
       <label class="ctl">
         <span class="ctl-head">Скорость <b id="val-speed">18 строк/мин</b></span>
-        <input type="range" id="speed" min="4" max="120" step="1" value="18">
+        <!-- границы задаёт app.js (SPEED_MIN/SPEED_MAX) -->
+        <input type="range" id="speed" step="1" value="18">
       </label>
 
       <label class="ctl">
@@ -102,6 +103,7 @@
   <div id="viewer"><div id="track"></div></div>
   <div id="marker" aria-hidden="true"><i class="arrow left"></i><i class="line"></i><i class="arrow right"></i></div>
   <div id="progress" aria-hidden="true"><i></i></div>
+  <button id="exit" type="button" aria-label="Выход в настройки" title="Выход (Esc)">✕</button>
   <div id="paused-badge" hidden>пауза</div>
   <div id="hud" hidden></div>
   <div id="keyhelp">клик — пауза · колесо — скорость · Esc — выход</div>
