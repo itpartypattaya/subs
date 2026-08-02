@@ -375,8 +375,20 @@
     run.hudTimer = setTimeout(function () { el.hud.classList.add('fade'); }, 1100);
   }
 
-  function changeSpeed(delta) {
-    var next = Math.min(60, Math.max(4, settings.speed + delta));
+  var SPEED_MIN = 4;
+  var SPEED_MAX = 120;
+
+  // на медленных скоростях важна точность, на быстрых — быстрый разгон,
+  // иначе от рабочих 18 до потолка пришлось бы крутить колесо сотню раз
+  function speedStep(value) {
+    if (value < 30) return 1;
+    if (value < 60) return 2;
+    return 5;
+  }
+
+  function changeSpeed(direction) {
+    var step = speedStep(direction > 0 ? settings.speed : settings.speed - 1);
+    var next = Math.min(SPEED_MAX, Math.max(SPEED_MIN, settings.speed + direction * step));
     if (next === settings.speed) return;
     settings.speed = next;
     el.speed.value = next;
