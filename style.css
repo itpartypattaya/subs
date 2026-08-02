@@ -346,10 +346,31 @@ body.mirror #viewer { transform: scaleX(-1); }
 }
 body.align-center #track { text-align: center; }
 
-#track > p { margin: 0 0 0.7em; }
+/* Невидимый двойник трека для оценки времени: та же ширина колонки и шрифт
+   (проставляет app.js), вертикальных отступов нет — offsetHeight равен чистой
+   высоте текста. overflow:hidden не даёт нижнему отступу последнего абзаца
+   схлопнуться наружу, как он не схлопывается у трека с его паддингами. */
+#measurer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* не right:0 — на экране настройки есть скроллбар, и right:0 сделал бы
+     измеритель уже трека в суфлёре (там скроллбара нет); 100vw включает
+     скроллбар и совпадает с шириной полноэкранной прокрутки */
+  width: 100vw;
+  z-index: -1;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+  font-weight: 600;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.reading > p { margin: 0 0 0.7em; }
 
 /* Знак вдоха: заметен боковым зрением, но не разрывает строку */
-#track .breath {
+.reading .breath {
   margin: 0 0.14em;
   color: var(--stage-accent);
   opacity: 0.75;
@@ -357,7 +378,7 @@ body.align-center #track { text-align: center; }
 }
 
 /* Остановка: полоса поперёк колонки со знаком паузы посередине */
-#track .stop {
+.reading .stop {
   display: flex;
   align-items: center;
   gap: 0.5em;
@@ -365,8 +386,8 @@ body.align-center #track { text-align: center; }
   color: var(--stage-accent);
   opacity: 0.75;
 }
-#track .stop::before,
-#track .stop::after {
+.reading .stop::before,
+.reading .stop::after {
   content: '';
   flex: 1;
   height: 3px;
@@ -374,7 +395,7 @@ body.align-center #track { text-align: center; }
   background: currentColor;
   opacity: 0.45;
 }
-#track .stop i {
+.reading .stop i {
   flex: none;
   width: 0.34em;
   height: 0.62em;

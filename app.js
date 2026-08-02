@@ -4,6 +4,13 @@
 
   var STORE_KEY = 'teleprompter.v1';
 
+  // чистые текстовые функции живут в text-tools.js (подключается раньше) —
+  // отдельно от DOM, чтобы их покрывала тест-страница tests.html
+  var T = window.TextTools;
+  var plural = T.plural, formatTime = T.formatTime, speedLabel = T.speedLabel;
+  var stripMarks = T.stripMarks, countMarks = T.countMarks;
+  var autoPauses = T.autoPauses, typograf = T.typograf;
+
   var el = {
     body: document.body,
     setup: document.getElementById('setup'),
@@ -37,6 +44,7 @@
     exit: document.getElementById('exit'),
     viewer: document.getElementById('viewer'),
     track: document.getElementById('track'),
+    measurer: document.getElementById('measurer'),
     progress: document.querySelector('#progress i'),
     pausedBadge: document.getElementById('paused-badge'),
     hud: document.getElementById('hud'),
@@ -142,6 +150,13 @@
     el.track.style.paddingLeft = (100 - settings.width) / 2 + 'vw';
     el.track.style.paddingRight = (100 - settings.width) / 2 + 'vw';
 
+    // измеритель оценки времени вёрстается ровно как трек (кроме вертикальных
+    // отступов: их у него нет, чтобы offsetHeight был чистой высотой текста)
+    el.measurer.style.fontSize = settings.size + 'px';
+    el.measurer.style.lineHeight = String(LINE_RATIO);
+    el.measurer.style.paddingLeft = (100 - settings.width) / 2 + 'vw';
+    el.measurer.style.paddingRight = (100 - settings.width) / 2 + 'vw';
+
     el.previewText.style.fontSize = settings.size + 'px';
     el.previewText.style.lineHeight = String(LINE_RATIO);
     el.previewText.style.width = settings.width + '%';
@@ -160,30 +175,13 @@
     return settings.speed * settings.size * LINE_RATIO / 60;
   }
 
-  function stripMarks(value) {
-    return value.replace(/\|\|?/g, ' ');
-  }
-
-  function countMarks(value) {
-    var stops = (value.match(/\|\|/g) || []).length;
-    var breaths = (value.replace(/\|\|/g, '').match(/\|/g) || []).length;
-    return { stops: stops, breaths: breaths };
-  }
-
   function updateStats() {
     var value = stripMarks(el.text.value).trim();
     var words = value ? value.split(/\s+/).length : 0;
     el.statWords.textContent = words + ' ' + plural(words, 'слово', 'слова', 'слов');
     el.start.disabled = words === 0;
 
-    // Оценка: сколько строк займёт текст при выбранной ширине и размере,
-    // делённое на скорость. Считаем по фактической ширине окна.
-    var seconds = 0;
-    if (words > 0) {
-      var lines = estimateLines(value);
-      seconds = lines / settings.speed * 60;
-    }
-    el.statTime.textContent = '≈ ' + formatTime(seconds);
+    el.statTime.textContent = '≈ ' + formatTime(words > 0 ? estimateSeconds() : 0);
     el.previewText.textContent = value ? firstLine(value) : 'Пример строки текста';
 
     var marks = countMarks(el.text.value);
@@ -199,57 +197,39 @@
     return line.length > 200 ? line.slice(0, 200) : line;
   }
 
-  // Приблизительное число строк: ширина колонки / средняя ширина символа.
-  function estimateLines(value) {
-    var columnPx = window.innerWidth * settings.width / 100;
-    var charsPerLine = Math.max(8, Math.floor(columnPx / (settings.size * 0.5)));
-    var total = 0;
-    var paragraphs = value.split(/\n/);
-    for (var i = 0; i < paragraphs.length; i++) {
-      var len = paragraphs[i].trim().length;
-      total += len ? Math.ceil(len / charsPerLine) : 0.5;
-    }
-    return Math.max(1, total);
-  }
-
-  function formatTime(seconds) {
-    seconds = Math.round(seconds);
-    var min = Math.floor(seconds / 60);
-    var sec = seconds % 60;
-    if (min === 0) return sec + ' сек';
-    return min + ' ' + plural(min, 'мин', 'мин', 'мин') + ' ' + (sec < 10 ? '0' : '') + sec + ' сек';
-  }
-
-  function speedLabel(value) {
-    return value + ' ' + plural(value, 'строка', 'строки', 'строк') + '/мин';
-  }
-
-  function plural(n, one, few, many) {
-    var mod10 = n % 10, mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
-    return many;
+  // Оценка по фактической вёрстке, а не по «средней ширине символа»:
+  // текст рендерится в невидимый измеритель с теми же шрифтом, интервалом
+  // и шириной колонки, что у трека, и высота делится на скорость прокрутки.
+  // Прежняя эвристика занижала время на ~15–20% для жирной кириллицы.
+  function estimateSeconds() {
+    renderText(el.measurer);
+    var px = el.measurer.offsetHeight;
+    el.measurer.textContent = ''; // копию текста в DOM не держим
+    return px / pxPerSecond();
   }
 
   /* ---------- подготовка текста ---------- */
 
-  function renderText() {
-    el.track.textContent = '';
+  // target по умолчанию — трек суфлёра; оценка времени рендерит тот же текст
+  // в невидимый #measurer, чтобы мерить фактическую вёрстку
+  function renderText(target) {
+    target = target || el.track;
+    target.textContent = '';
     var paragraphs = el.text.value.replace(/\r/g, '').split(/\n{2,}/);
     for (var i = 0; i < paragraphs.length; i++) {
       var block = paragraphs[i].trim();
-      if (block) renderBlock(block);
+      if (block) renderBlock(block, target);
     }
-    if (!el.track.childNodes.length) {
+    if (!target.childNodes.length) {
       var empty = document.createElement('p');
       empty.textContent = el.text.value.trim();
-      el.track.appendChild(empty);
+      target.appendChild(empty);
     }
   }
 
   // «|» — вдох: знак в строке, прокрутка не прерывается.
   // «||» — остановка: отдельная полоса, на ней суфлёр встаёт и ждёт человека.
-  function renderBlock(block) {
+  function renderBlock(block, target) {
     var parts = block.split(/(\|\|?)/);
     var nodes = [];
 
@@ -259,7 +239,7 @@
       var p = document.createElement('p');
       for (var n = 0; n < nodes.length; n++) p.appendChild(nodes[n]);
       nodes = [];
-      if (p.textContent.trim()) el.track.appendChild(p);
+      if (p.textContent.trim()) target.appendChild(p);
     }
 
     for (var i = 0; i < parts.length; i++) {
@@ -269,7 +249,7 @@
         var stop = document.createElement('div');
         stop.className = 'stop';
         stop.appendChild(document.createElement('i'));
-        el.track.appendChild(stop);
+        target.appendChild(stop);
       } else if (part === '|') {
         var breath = document.createElement('span');
         breath.className = 'breath';
@@ -540,45 +520,6 @@
     ta.setSelectionRange(head.length, head.length);
     ta.focus();
     commitText();
-  }
-
-  // сокращения и инициалы, после которых точка не кончает предложение
-  var ABBR = /^(?:т|д|е|п|г|гг|в|вв|см|стр|рис|табл|руб|коп|тыс|млн|млрд|им|др|пр|ул|кв|обл|тел|мин|сек|ч|кг|км|шт|проф|доц|акад)$/i;
-
-  // черновая разметка по концам предложений: дальше человек правит руками,
-  // это дешевле, чем размечать пятиминутный текст с нуля.
-  // Пробел ищем как [^\S\n]: из Word и с веб-страниц текст приходит
-  // с неразрывными пробелами, и на них разметка молча не срабатывала.
-  function autoPauses(value) {
-    return value.split('\n').map(function (line) {
-      return line.replace(/([^\s.!?…]*)([.!?…]+[»"')\]]*)([^\S\n]+)(?=[^\s|])/g, function (all, word, punct) {
-        if (word.length <= 1 || ABBR.test(word)) return all; // инициал или сокращение
-        return word + punct + ' | ';
-      });
-    }).join('\n');
-  }
-
-  // короткие слова, которые не должны отрываться от следующего слова
-  var SHORT_WORDS = 'а|и|но|да|же|ли|бы|не|ни|в|во|к|ко|с|со|о|об|обо|от|ото|до|из|изо|у|за|на|по|над|под|про|при|для|без|через|что|как|это';
-
-  var NBSP = '\u00A0'; // неразрывный пробел
-
-  function typograf(value) {
-    return value
-      .replace(/\r/g, '')
-      .replace(/[\u00A0\u202F\u2007\u2009]/g, ' ')  // пробелы из Word — к обычным
-      .replace(/[ \t]{2,}/g, ' ')                            // двойные пробелы
-      .replace(/[ \t]+([,;:.!?…])/g, '$1')                   // пробел перед знаком препинания
-      .replace(/\.{3,}/g, '…')                               // многоточие одним знаком
-      .replace(/(^|[\s(])-{1,2}(\s)/g, '$1—$2')              // дефис в роли тире
-      .replace(/"([^"\n]+)"/g, '«$1»')                       // кавычки-ёлочки
-      .replace(/(^|[\s(«])'([^'\n]+)'/g, '$1„$2“')
-      .replace(/([(«])[ \t]+/g, '$1')                        // пробел после открывающей скобки
-      .replace(/[ \t]+([)»])/g, '$1')
-      .replace(new RegExp('(^|[\\s(«„])(' + SHORT_WORDS + ') ', 'gi'), '$1$2' + NBSP)
-      .replace(/[ \t]+$/gm, '')                              // хвосты строк
-      .replace(/\n{3,}/g, '\n\n')                            // лишние пустые строки
-      .trim();
   }
 
   function commitText() {

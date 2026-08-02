@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Телесуфлёр — тесты текстовых функций</title>
+<style>
+  body { margin: 0; padding: 32px 20px; background: #0e1013; color: #e8eaee;
+         font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  #summary { margin: 0 0 24px; font-size: 15px; }
+  #summary.ok { color: #4ade80; }
+  #summary.fail { color: #f87171; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 6px 10px; border-left: 3px solid #2a2f3a; margin-bottom: 4px; }
+  li.pass { border-color: #4ade80; }
+  li.fail { border-color: #f87171; background: rgba(248, 113, 113, 0.08); }
+  li.fail div { color: #8b93a3; font-size: 13px; white-space: pre-wrap; }
+  code { background: #1e222a; padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  h2 { font-size: 15px; color: #8b93a3; margin: 26px 0 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Тесты текстовых функций</h1>
+  <p id="summary">выполняются…</p>
+  <div id="out"></div>
+</div>
+
+<script src="text-tools.js"></script>
+<script>
+(function () {
+  'use strict';
+  var T = window.TextTools;
+  var NBSP = '\u00A0';
+  var sections = [];
+  var current = null;
+
+  function section(name) { current = { name: name, cases: [] }; sections.push(current); }
+  function eq(name, got, want) { current.cases.push({ name: name, ok: got === want, got: got, want: want }); }
+
+  /* ---------- typograf ---------- */
+  section('Типограф');
+  eq('кавычки-ёлочки', T.typograf('Он сказал "привет" им.'), 'Он сказал «привет» им.');
+  eq('дефис в роли тире', T.typograf('Это - тест.'), 'Это' + NBSP + '— тест.');
+  eq('диапазон чисел не трогается', T.typograf('Придут 5-10 человек.'), 'Придут 5-10 человек.');
+  eq('многоточие одним знаком', T.typograf('Ну... ладно.'), 'Ну… ладно.');
+  eq('двойные пробелы', T.typograf('Раз  два   три.'), 'Раз два три.');
+  eq('пробел перед знаком препинания', T.typograf('Слово , потом .'), 'Слово, потом.');
+  eq('неразрывный после предлога', T.typograf('Пошёл в дом.'), 'Пошёл в' + NBSP + 'дом.');
+  eq('цепочка коротких слов', T.typograf('И не и не.'), 'И' + NBSP + 'не' + NBSP + 'и' + NBSP + 'не.');
+  eq('NBSP из Word нормализуется', T.typograf('Привет.' + NBSP + 'Хорошо посидели.'), 'Привет. Хорошо посидели.');
+  eq('метки пауз выживают', T.typograf('Раз. | Два.\n\n||\n\nТри.'), 'Раз. | Два.\n\n||\n\nТри.');
+  eq('лишние пустые строки', T.typograf('Раз.\n\n\n\nДва.'), 'Раз.\n\nДва.');
+  eq('хвостовые пробелы строк', T.typograf('Раз.   \nДва.'), 'Раз.\nДва.');
+  var once = T.typograf('Он сказал "привет"  - и ушёл ...');
+  eq('идемпотентность', T.typograf(once), once);
+
+  /* ---------- autoPauses ---------- */
+  section('Авторасстановка вдохов');
+  eq('базовый случай', T.autoPauses('Привет. Как дела? Хорошо.'), 'Привет. | Как дела? | Хорошо.');
+  eq('неразрывные пробелы (Word)', T.autoPauses('Привет.' + NBSP + 'Как дела?' + NBSP + 'Хорошо.'), 'Привет. | Как дела? | Хорошо.');
+  eq('инициалы пропускаются', T.autoPauses('Пришёл А. С. Пушкин. Дальше текст.'), 'Пришёл А. С. Пушкин. | Дальше текст.');
+  eq('сокращения пропускаются', T.autoPauses('Купил хлеб и т. д. Ушёл домой.'), 'Купил хлеб и т. д. Ушёл домой.');
+  eq('многоточие', T.autoPauses('Ну… Ладно тогда.'), 'Ну… | Ладно тогда.');
+  eq('кавычка после точки', T.autoPauses('Он сказал «да». Потом ушёл.'), 'Он сказал «да». | Потом ушёл.');
+  eq('перед существующей меткой не ставится', T.autoPauses('Раз. | Два. Три.'), 'Раз. | Два. | Три.');
+  eq('конец строки без метки', T.autoPauses('Одна строка.'), 'Одна строка.');
+  eq('вопрос и восклицание', T.autoPauses('Кто там?! Никого нет.'), 'Кто там?! | Никого нет.');
+  var auto1 = T.autoPauses('Первое. Второе. Третье.');
+  eq('идемпотентность', T.autoPauses(auto1), auto1);
+
+  /* ---------- countMarks / stripMarks ---------- */
+  section('Подсчёт и очистка меток');
+  eq('вдохи и остановки считаются', JSON.stringify(T.countMarks('Раз | два || три | конец')), '{"stops":1,"breaths":2}');
+  eq('пустой текст', JSON.stringify(T.countMarks('без меток')), '{"stops":0,"breaths":0}');
+  eq('stripMarks убирает метки', T.stripMarks('Раз | два || три').replace(/\s+/g, ' '), 'Раз два три');
+
+  /* ---------- plural / formatTime / speedLabel ---------- */
+  section('Склонения и форматирование');
+  eq('1 слово', T.plural(1, 'слово', 'слова', 'слов'), 'слово');
+  eq('2 слова', T.plural(2, 'слово', 'слова', 'слов'), 'слова');
+  eq('5 слов', T.plural(5, 'слово', 'слова', 'слов'), 'слов');
+  eq('11 слов', T.plural(11, 'слово', 'слова', 'слов'), 'слов');
+  eq('21 слово', T.plural(21, 'слово', 'слова', 'слов'), 'слово');
+  eq('104 слова', T.plural(104, 'слово', 'слова', 'слов'), 'слова');
+  eq('секунды', T.formatTime(42), '42 сек');
+  eq('минуты с ведущим нулём секунд', T.formatTime(65), '1 мин 05 сек');
+  eq('округление', T.formatTime(119.6), '2 мин 00 сек');
+  eq('1 строка/мин', T.speedLabel(1), '1 строка/мин');
+  eq('22 строки/мин', T.speedLabel(22), '22 строки/мин');
+  eq('120 строк/мин', T.speedLabel(120), '120 строк/мин');
+
+  /* ---------- вывод ---------- */
+  var out = document.getElementById('out');
+  var total = 0, failed = 0;
+  sections.forEach(function (s) {
+    var h = document.createElement('h2');
+    h.textContent = s.name;
+    out.appendChild(h);
+    var ul = document.createElement('ul');
+    s.cases.forEach(function (c) {
+      total += 1;
+      var li = document.createElement('li');
+      li.className = c.ok ? 'pass' : 'fail';
+      li.textContent = (c.ok ? '✓ ' : '✗ ') + c.name;
+      if (!c.ok) {
+        failed += 1;
+        var d = document.createElement('div');
+        d.textContent = 'получено: ' + JSON.stringify(c.got) + '\nожидалось: ' + JSON.stringify(c.want);
+        li.appendChild(d);
+      }
+      ul.appendChild(li);
+    });
+    out.appendChild(ul);
+  });
+  var summary = document.getElementById('summary');
+  summary.textContent = failed === 0
+    ? 'Все ' + total + ' тестов прошли'
+    : failed + ' из ' + total + ' упали';
+  summary.className = failed === 0 ? 'ok' : 'fail';
+  document.title = (failed === 0 ? '✓ ' : '✗ ') + document.title;
+  window.__testResults = { total: total, failed: failed };
+})();
+</script>
+</body>
+</html>

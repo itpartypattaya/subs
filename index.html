@@ -100,7 +100,7 @@
 
 <!-- ЭКРАН СУФЛЁРА -->
 <section id="prompter" hidden>
-  <div id="viewer"><div id="track"></div></div>
+  <div id="viewer"><div id="track" class="reading"></div></div>
   <div id="marker" aria-hidden="true"><i class="arrow left"></i><i class="line"></i><i class="arrow right"></i></div>
   <div id="progress" aria-hidden="true"><i></i></div>
   <button id="exit" type="button" aria-label="Выход в настройки" title="Выход (Esc)">✕</button>
@@ -110,6 +110,10 @@
   <div id="countdown" hidden><span></span></div>
 </section>
 
+<!-- невидимый измеритель: оценка времени чтения по фактической вёрстке -->
+<div id="measurer" class="reading" aria-hidden="true"></div>
+
+<script src="text-tools.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
