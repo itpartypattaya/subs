@@ -58,9 +58,15 @@ body.stage-yellow {
    браузерного [hidden] — без этого скрытые слои остаются на экране */
 [hidden] { display: none !important; }
 
-html, body {
+html { height: 100%; }
+
+/* Фон только на body — и только он. Классы тем (ui-light, stage-*) живут на
+   body, поэтому html читал бы --bg из :root, то есть всегда тёмный. А раз у
+   html свой фон есть, фон body перестаёт распространяться на канву и красит
+   лишь свою коробку: ниже первого экрана вылезала тёмная подложка. */
+body {
   margin: 0;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -71,7 +77,7 @@ body.running { overflow: hidden; background: var(--stage-bg); }
 
 /* ---------- Экран настройки ---------- */
 
-#setup { min-height: 100%; padding: 40px 20px 64px; }
+#setup { padding: 40px 20px 64px; }
 
 .wrap { max-width: 940px; margin: 0 auto; }
 
