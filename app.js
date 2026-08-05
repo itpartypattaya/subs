@@ -99,15 +99,35 @@
 
   /* ---------- настройки: хранение и применение ---------- */
 
+  // числа из хранилища не берём на веру: строка или число вне границ дали бы
+  // NaN в pxPerSecond(), и суфлёр «ехал» бы в никуда без ошибки в консоли,
+  // а лечилось бы это только ручной чисткой localStorage
+  function numeric(value, min, max, fallback) {
+    value = Number(value);
+    return isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
+  }
+
   function load() {
-    try {
-      var saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
-      Object.keys(settings).forEach(function (k) {
-        if (saved[k] !== undefined && saved[k] !== null) settings[k] = saved[k];
-      });
+    var saved;
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); }
+    catch (e) { return; } // повреждённое хранилище — просто значения по умолчанию
+    if (!saved || typeof saved !== 'object') return;
+
+    if (typeof saved.text === 'string') settings.text = saved.text;
+    // границы размера и ширины живут в атрибутах слайдеров — берём их же
+    settings.size = numeric(saved.size, Number(el.size.min), Number(el.size.max), settings.size);
+    settings.width = numeric(saved.width, Number(el.width.min), Number(el.width.max), settings.width);
+    settings.speed = numeric(saved.speed, SPEED_MIN, SPEED_MAX, settings.speed);
+    if (saved.stage === 'dark' || saved.stage === 'light' || saved.stage === 'yellow') {
+      settings.stage = saved.stage;
+    } else if (saved.theme) {
       // до появления светлой темы вариант назывался theme: white | yellow
-      if (saved.theme && !saved.stage) settings.stage = saved.theme === 'yellow' ? 'yellow' : 'dark';
-    } catch (e) { /* повреждённое хранилище — просто берём значения по умолчанию */ }
+      settings.stage = saved.theme === 'yellow' ? 'yellow' : 'dark';
+    }
+    if (saved.ui === 'dark' || saved.ui === 'light') settings.ui = saved.ui;
+    if (saved.align === 'left' || saved.align === 'center') settings.align = saved.align;
+    if (saved.mirror !== undefined) settings.mirror = !!saved.mirror;
+    if (saved.countdown !== undefined) settings.countdown = !!saved.countdown;
   }
 
   function systemTheme() {
@@ -351,6 +371,7 @@
     if (!run.active) return; // на скрытом экране мерить нечего: одни нули
     run.max = Math.max(0, el.track.offsetHeight - el.viewer.clientHeight);
     run.pos = Math.min(run.max, run.share * run.max);
+    if (run.pos < run.max) clearAtEnd(); // высота вернулась — «дочитано» больше не правда
     if (el.viewer.clientWidth > 0) run.stageWidth = el.viewer.clientWidth; // для честной оценки времени
     collectStops();
     draw();
@@ -367,6 +388,15 @@
 
   /* ---------- запуск и остановка ---------- */
 
+  // Суфлёр ложится поверх настройки, но та остаётся в DOM: Tab уводил фокус
+  // на её кнопки, и Enter нажимал их вслепую — вплоть до «Очистить» посреди
+  // записи. inert выключает фокус, клики и скринридер; где inert ещё нет —
+  // прячем экран целиком (побочный сброс прокрутки страницы терпим).
+  function setSetupInert(on) {
+    if ('inert' in el.setup) el.setup.inert = on;
+    else el.setup.hidden = on;
+  }
+
   function startPrompter(fromStart) {
     // единственный источник правды о «есть что читать» — та же проверка,
     // что гасит кнопку: иначе Ctrl+Enter запускал суфлёр на тексте из одних меток
@@ -378,6 +408,7 @@
 
     renderText();
     el.prompter.hidden = false;
+    setSetupInert(true);
     el.body.classList.add('running');
     syncThemeColor(); // фон сменился на экран суфлёра — полоска браузера следом
     el.pausedBadge.hidden = true;
@@ -418,6 +449,7 @@
     run.active = false;
     swipe.active = false; // недоведённый жест не должен мотать закрытый суфлёр
     el.prompter.hidden = true;
+    setSetupInert(false);
     el.body.classList.remove('running');
     syncThemeColor();
     clearTimeout(run.countdownTimer);
@@ -444,16 +476,26 @@
 
   var BADGE = {
     stop: 'остановка · клик — дальше',
-    end: 'конец · клик — сначала'
+    end: 'конец · клик — сначала',
+    pause: 'пауза'
   };
 
   function pause(reason) {
     run.playing = false;
     run.wheelAcc = 0;
     run.atEnd = reason === 'end';
-    el.pausedBadge.textContent = BADGE[reason] || 'пауза';
+    el.pausedBadge.textContent = BADGE[reason] || BADGE.pause;
     el.pausedBadge.hidden = !run.active;
     cancelAnimationFrame(run.raf);
+  }
+
+  // «дочитано» снимается вместе с текстом плашки: иначе после отмотки назад
+  // от конца (или поворота экрана, на миг сделавшего max нулевым) плашка
+  // обещала «клик — сначала», а клик уже продолжал с места
+  function clearAtEnd() {
+    if (!run.atEnd) return;
+    run.atEnd = false;
+    if (run.active && !run.playing) el.pausedBadge.textContent = BADGE.pause;
   }
 
   function toggle() {
@@ -466,7 +508,7 @@
   // метку и снимает признак «дочитано», если уехали от конца
   function setPos(px) {
     run.pos = Math.min(run.max, Math.max(0, px));
-    if (run.pos < run.max) run.atEnd = false;
+    if (run.pos < run.max) clearAtEnd();
     updateShare();
     syncStopIndex();
     draw();
@@ -677,10 +719,13 @@
   });
 
   el.stripPauses.addEventListener('click', function () {
+    // [^\S\n] — любой пробел, кроме переноса строки: типограф клеит короткое
+    // слово к метке неразрывным пробелом («и |»), и чистка по [ \t]
+    // оставляла его — в тексте появлялся двойной пробел
     el.text.value = el.text.value
-      .replace(/[ \t]*\|\|?[ \t]*/g, ' ')
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/^[ \t]+/gm, '');
+      .replace(/[^\S\n]*\|\|?[^\S\n]*/g, ' ')
+      .replace(/[^\S\n]+\n/g, '\n')
+      .replace(/^[^\S\n]+/gm, '');
     commitText();
   });
 
@@ -825,7 +870,9 @@
       case ' ':
       case 'Spacebar':
         e.preventDefault();
-        toggle();
+        // автоповтор зажатой клавиши не должен дёргать паузу-пуск лотереей;
+        // для стрелок повтор, наоборот, желателен — это разгон скорости
+        if (!e.repeat) toggle();
         break;
       case 'Escape':
         stopPrompter();
