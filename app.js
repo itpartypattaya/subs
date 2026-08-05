@@ -26,6 +26,7 @@
     toolNote: document.getElementById('tool-note'),
     uiTheme: document.getElementById('ui-theme'),
     uiThemeLabel: document.getElementById('ui-theme-label'),
+    themeColor: document.querySelector('meta[name="theme-color"]'),
     previewStrip: document.getElementById('preview-strip'),
     previewText: document.getElementById('preview-text'),
     size: document.getElementById('size'),
@@ -162,6 +163,7 @@
     el.body.classList.toggle('align-center', settings.align === 'center');
     el.body.classList.toggle('mirror', settings.mirror);
     el.uiThemeLabel.textContent = currentUi() === 'light' ? 'Тёмная тема' : 'Светлая тема';
+    syncThemeColor();
 
     el.track.style.fontSize = settings.size + 'px';
     el.track.style.lineHeight = String(LINE_RATIO);
@@ -184,6 +186,18 @@
     el.valWidth.textContent = settings.width + ' %';
 
     updateStats();
+  }
+
+  // Полоска браузера на телефоне красится в theme-color. Цвет берём из
+  // фактического фона body, а не из константы в разметке: иначе при светлом
+  // интерфейсе полоска остаётся тёмной, а в суфлёре не совпадает с экраном
+  // чтения. Прозрачный фон (CSS ещё не приехал) игнорируем — лучше значение
+  // из HTML, чем чёрная полоска.
+  function syncThemeColor() {
+    if (!el.themeColor) return;
+    var bg = window.getComputedStyle(el.body).backgroundColor;
+    if (!bg || bg === 'transparent' || bg.replace(/\s/g, '') === 'rgba(0,0,0,0)') return;
+    el.themeColor.setAttribute('content', bg);
   }
 
   /* ---------- статистика и оценка времени ---------- */
@@ -365,6 +379,7 @@
     renderText();
     el.prompter.hidden = false;
     el.body.classList.add('running');
+    syncThemeColor(); // фон сменился на экран суфлёра — полоска браузера следом
     el.pausedBadge.hidden = true;
     run.active = true;
     if (fromStart) run.share = 0;
@@ -404,6 +419,7 @@
     swipe.active = false; // недоведённый жест не должен мотать закрытый суфлёр
     el.prompter.hidden = true;
     el.body.classList.remove('running');
+    syncThemeColor();
     clearTimeout(run.countdownTimer);
     clearTimeout(run.keyhelpTimer);
     el.countdown.hidden = true;
