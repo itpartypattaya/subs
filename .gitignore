@@ -6,3 +6,6 @@ Thumbs.db
 desktop.ini
 .DS_Store
 *.swp
+
+# рабочие планы агента — транзиент, не документация (см. HANDOFF.md)
+plans/
