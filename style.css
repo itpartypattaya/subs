@@ -9,6 +9,9 @@
   --ink: #e8eaee;
   --muted: #8b93a3;
   --accent: #4f8cff;
+  /* заливка главной кнопки: акцент как цвет текста на тёмном фоне хорош (5.9),
+     а белые буквы на нём дают лишь 3.2 — кнопке нужен оттенок глубже (4.65) */
+  --accent-strong: #2f6fe4;
   --accent-ink: #ffffff;
   --radius: 14px;
 
@@ -33,7 +36,9 @@ body.ui-light {
   --line: #d7dbe3;
   --ink: #14171d;
   --muted: #5c6472;
-  --accent: #2f6fe4;
+  /* #2f6fe4 давал 4.22 на фоне страницы — ниже нормы 4.5 для текста */
+  --accent: #2563d0;
+  --accent-strong: #2563d0;
 }
 
 /* светлый экран суфлёра — читать с яркого экрана при дневном свете */
@@ -43,7 +48,7 @@ body.stage-light {
   --stage-soft: rgba(0, 0, 0, 0.45);
   --stage-faint: rgba(0, 0, 0, 0.09);
   --stage-veil: rgba(255, 255, 255, 0.72);
-  --stage-accent: #2f6fe4;
+  --stage-accent: #2563d0;
 }
 
 body.stage-yellow {
@@ -191,9 +196,12 @@ h1 {
   background: var(--stage-bg);
   overflow: hidden;
 }
+/* подпись — часть интерфейса, а не экрана суфлёра: на фоне сцены серый текст
+   интерфейса давал 3.1–3.5 (тёмный интерфейс над светлой сценой и наоборот) */
 .preview-label {
   padding: 8px 14px;
   border-bottom: 1px solid var(--line);
+  background: var(--panel);
   color: var(--muted);
   font-size: 12px;
   letter-spacing: 0.04em;
@@ -295,14 +303,15 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bo
   padding: 20px;
   border: 0;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-ink);
   font-family: inherit;
   font-size: 19px;
   font-weight: 600;
   cursor: pointer;
 }
-.primary:hover { filter: brightness(1.08); }
+/* наведение темнит, а не осветляет: осветление роняло контраст белых букв */
+.primary:hover { filter: brightness(0.92); }
 .primary:disabled { background: var(--panel-2); color: var(--muted); cursor: default; filter: none; }
 
 .secondary {
