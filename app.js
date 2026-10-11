@@ -7,9 +7,12 @@
   // чистые текстовые функции живут в text-tools.js (подключается раньше) —
   // отдельно от DOM, чтобы их покрывала тест-страница tests.html
   var T = window.TextTools;
-  var plural = T.plural, formatTime = T.formatTime, speedLabel = T.speedLabel;
+  var formatTime = T.formatTime, speedLabel = T.speedLabel;
   var stripMarks = T.stripMarks, countMarks = T.countMarks;
   var autoPauses = T.autoPauses, typograf = T.typograf;
+
+  // словари интерфейса — i18n.js (подключается между text-tools.js и app.js)
+  var I18n = window.I18n;
 
   var el = {
     body: document.body,
@@ -27,6 +30,8 @@
     uiTheme: document.getElementById('ui-theme'),
     uiThemeLabel: document.getElementById('ui-theme-label'),
     themeColor: document.querySelector('meta[name="theme-color"]'),
+    description: document.querySelector('meta[name="description"]'),
+    lang: document.getElementById('lang'),
     previewStrip: document.getElementById('preview-strip'),
     previewText: document.getElementById('preview-text'),
     size: document.getElementById('size'),
@@ -71,6 +76,7 @@
     width: 70,     // % ширины экрана
     stage: 'dark', // экран суфлёра: dark | light | yellow
     ui: '',        // интерфейс: dark | light, пусто — взять системную
+    lang: '',      // язык интерфейса: ru | en, пусто — взять язык браузера
     align: 'left',
     mirror: false,
     countdown: true
@@ -125,6 +131,7 @@
       settings.stage = saved.theme === 'yellow' ? 'yellow' : 'dark';
     }
     if (saved.ui === 'dark' || saved.ui === 'light') settings.ui = saved.ui;
+    if (I18n.LANGS.indexOf(saved.lang) >= 0) settings.lang = saved.lang;
     if (saved.align === 'left' || saved.align === 'center') settings.align = saved.align;
     if (saved.mirror !== undefined) settings.mirror = !!saved.mirror;
     if (saved.countdown !== undefined) settings.countdown = !!saved.countdown;
@@ -143,6 +150,48 @@
   // раз берём актуальную системную, а не замораживаем её при первом визите
   function currentUi() {
     return settings.ui === 'light' || settings.ui === 'dark' ? settings.ui : systemTheme();
+  }
+
+  // язык так же: пока не выбран кнопкой, берём язык браузера, а не
+  // замораживаем его при первом визите
+  function currentLang() {
+    return settings.lang || I18n.detect();
+  }
+
+  function t(key, params) {
+    return I18n.t(currentLang(), key, params);
+  }
+
+  // Статичные строки разметки (data-i18n*). Динамические — счётчики, оценку
+  // времени, подписи слайдеров — пересобирает applySettings(), её вызывают
+  // вместе. На каждое движение слайдера этот обход не нужен, поэтому отдельно.
+  function applyLanguage() {
+    var lang = currentLang();
+    document.documentElement.lang = lang;
+    document.title = t('title');
+    if (el.description) el.description.setAttribute('content', t('description'));
+
+    var i, nodes;
+    nodes = document.querySelectorAll('[data-i18n]');
+    for (i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'));
+
+    // только наши строки из словаря, ввод пользователя сюда не попадает
+    nodes = document.querySelectorAll('[data-i18n-html]');
+    for (i = 0; i < nodes.length; i++) nodes[i].innerHTML = t(nodes[i].getAttribute('data-i18n-html'));
+
+    nodes = document.querySelectorAll('[data-i18n-attr]');
+    for (i = 0; i < nodes.length; i++) {
+      var pairs = nodes[i].getAttribute('data-i18n-attr').split(';');
+      for (var j = 0; j < pairs.length; j++) {
+        var pair = pairs[j].split(':');
+        nodes[i].setAttribute(pair[0], t(pair[1]));
+      }
+    }
+
+    // подсказка кнопки написана на целевом языке — пусть и читается на нём
+    el.lang.setAttribute('lang', lang === 'ru' ? 'en' : 'ru');
+    // сообщение инструмента осталось бы на прежнем языке до своего таймера
+    el.toolNote.hidden = true;
   }
 
   var saveTimer = 0;
@@ -182,7 +231,7 @@
     el.body.classList.toggle('ui-light', currentUi() === 'light');
     el.body.classList.toggle('align-center', settings.align === 'center');
     el.body.classList.toggle('mirror', settings.mirror);
-    el.uiThemeLabel.textContent = currentUi() === 'light' ? 'Тёмная тема' : 'Светлая тема';
+    el.uiThemeLabel.textContent = t(currentUi() === 'light' ? 'themeToDark' : 'themeToLight');
     syncThemeColor();
 
     el.track.style.fontSize = settings.size + 'px';
@@ -202,7 +251,7 @@
     el.previewText.style.textAlign = settings.align;
 
     el.valSize.textContent = settings.size + ' px';
-    el.valSpeed.textContent = speedLabel(settings.speed);
+    el.valSpeed.textContent = speedLabel(settings.speed, currentLang());
     el.valWidth.textContent = settings.width + ' %';
 
     updateStats();
@@ -229,16 +278,16 @@
   function updateStats() {
     var value = stripMarks(el.text.value).trim();
     var words = value ? value.split(/\s+/).length : 0;
-    el.statWords.textContent = words + ' ' + plural(words, 'слово', 'слова', 'слов');
+    el.statWords.textContent = I18n.count(currentLang(), words, 'words');
     el.start.disabled = words === 0;
 
     scheduleEstimate(words > 0);
-    el.previewText.textContent = value ? firstLine(value) : 'Пример строки текста';
+    el.previewText.textContent = value ? firstLine(value) : t('previewSample');
 
     var marks = countMarks(el.text.value);
     var parts = [];
-    if (marks.breaths) parts.push(marks.breaths + ' ' + plural(marks.breaths, 'вдох', 'вдоха', 'вдохов'));
-    if (marks.stops) parts.push(marks.stops + ' ' + plural(marks.stops, 'остановка', 'остановки', 'остановок'));
+    if (marks.breaths) parts.push(I18n.count(currentLang(), marks.breaths, 'breaths'));
+    if (marks.stops) parts.push(I18n.count(currentLang(), marks.stops, 'stops'));
     el.statPauses.textContent = parts.join(' · ');
     el.statPauses.hidden = parts.length === 0;
   }
@@ -274,13 +323,19 @@
 
   // Пересчёт рендерит весь текст, и на длинных выступлениях это десятки
   // миллисекунд на каждое нажатие клавиши — поэтому с задержкой.
+  // Прежняя оценка сразу перерисовывается на текущем языке: иначе после
+  // переключения языка 180 мс висело «2 min 47 sec» в русском интерфейсе.
   var estimateTimer = 0;
+  var lastEstimate = 0;
+  function showEstimate(seconds) {
+    lastEstimate = seconds;
+    el.statTime.textContent = '≈ ' + formatTime(seconds, currentLang());
+  }
   function scheduleEstimate(hasText) {
     clearTimeout(estimateTimer);
-    if (!hasText) { el.statTime.textContent = '≈ ' + formatTime(0); return; }
-    estimateTimer = setTimeout(function () {
-      el.statTime.textContent = '≈ ' + formatTime(estimateSeconds());
-    }, 180);
+    if (!hasText) { showEstimate(0); return; }
+    showEstimate(lastEstimate);
+    estimateTimer = setTimeout(function () { showEstimate(estimateSeconds()); }, 180);
   }
 
   /* ---------- подготовка текста ---------- */
@@ -426,9 +481,7 @@
 
     // подсказку пересобираем на каждый запуск: устройство может смениться
     // на ходу — к планшету подключили мышь или наоборот
-    el.keyhelp.textContent = touchOnly()
-      ? 'тап — пауза · свайп — скорость · ✕ — выход'
-      : 'клик — пауза · колесо — скорость · Esc — выход';
+    el.keyhelp.textContent = t(touchOnly() ? 'keyhelpTouch' : 'keyhelpMouse');
 
     // таймер именной: без очистки прогон, запущенный повторно раньше 3.5 с,
     // получал бы погашенную подсказку от предыдущего
@@ -474,17 +527,18 @@
     run.raf = requestAnimationFrame(tick);
   }
 
+  // ключи словаря для плашки на паузе
   var BADGE = {
-    stop: 'остановка · клик — дальше',
-    end: 'конец · клик — сначала',
-    pause: 'пауза'
+    stop: 'badgeStop',
+    end: 'badgeEnd',
+    pause: 'badgePause'
   };
 
   function pause(reason) {
     run.playing = false;
     run.wheelAcc = 0;
     run.atEnd = reason === 'end';
-    el.pausedBadge.textContent = BADGE[reason] || BADGE.pause;
+    el.pausedBadge.textContent = t(BADGE[reason] || BADGE.pause);
     el.pausedBadge.hidden = !run.active;
     cancelAnimationFrame(run.raf);
   }
@@ -495,7 +549,7 @@
   function clearAtEnd() {
     if (!run.atEnd) return;
     run.atEnd = false;
-    if (run.active && !run.playing) el.pausedBadge.textContent = BADGE.pause;
+    if (run.active && !run.playing) el.pausedBadge.textContent = t(BADGE.pause);
   }
 
   function toggle() {
@@ -646,9 +700,9 @@
     if (next === settings.speed) return;
     settings.speed = next;
     el.speed.value = next;
-    el.valSpeed.textContent = speedLabel(next);
+    el.valSpeed.textContent = speedLabel(next, currentLang());
     save();
-    showHud(speedLabel(next));
+    showHud(speedLabel(next, currentLang()));
   }
 
   function scrollBy(px) {
@@ -707,15 +761,15 @@
     commitText();
     var added = countMarks(el.text.value).breaths - before;
     showNote(added > 0
-      ? 'расставлено ' + added + ' ' + plural(added, 'вдох', 'вдоха', 'вдохов')
-      : 'подходящих мест не нашлось — вдохи ставятся после точки внутри абзаца');
+      ? t('noteAdded', { count: I18n.count(currentLang(), added, 'breaths') })
+      : t('noteNone'));
   });
 
   el.typograf.addEventListener('click', function () {
     var before = el.text.value;
     el.text.value = typograf(before);
     commitText();
-    showNote(el.text.value === before ? 'текст уже в порядке' : 'текст причёсан');
+    showNote(t(el.text.value === before ? 'noteClean' : 'noteTidied'));
   });
 
   el.stripPauses.addEventListener('click', function () {
@@ -755,6 +809,13 @@
   el.uiTheme.addEventListener('click', function () {
     settings.ui = currentUi() === 'light' ? 'dark' : 'light';
     applySettings();
+    save();
+  });
+
+  el.lang.addEventListener('click', function () {
+    settings.lang = currentLang() === 'ru' ? 'en' : 'ru';
+    applyLanguage();
+    applySettings(); // счётчики, оценка времени, подписи слайдеров, тема
     save();
   });
 
@@ -953,7 +1014,13 @@
     }
   }
 
+  // и за сменой языка браузера — тоже, пока язык не выбран кнопкой
+  window.addEventListener('languagechange', function () {
+    if (!settings.lang) { applyLanguage(); applySettings(); }
+  });
+
   fillControls();
+  applyLanguage();
   applySettings();
 
   // офлайн-режим; с file:// и без https воркер недоступен — тогда просто

@@ -11,26 +11,40 @@
 </head>
 <body>
 
+<!-- Строки интерфейса переводит app.js по словарям из i18n.js:
+     data-i18n — текст, data-i18n-html — наша разметка с <b>,
+     data-i18n-attr — атрибуты («title:ключ;aria-label:ключ»).
+     Русский текст в разметке — запасной вариант, пока скрипт не отработал. -->
+
 <!-- ЭКРАН НАСТРОЙКИ -->
 <main id="setup">
   <div class="wrap">
     <div class="head">
       <div>
-        <h1>Телесуфлёр</h1>
-        <p class="sub">Вставьте текст, подберите размер и скорость — и читайте прямо с экрана во время записи.</p>
+        <h1 data-i18n="title">Телесуфлёр</h1>
+        <p class="sub" data-i18n="sub">Вставьте текст, подберите размер и скорость — и читайте прямо с экрана во время записи.</p>
       </div>
-      <button id="ui-theme" class="ghost" type="button" title="Тема интерфейса"><span id="ui-theme-label">Светлая тема</span></button>
+      <div class="head-actions">
+        <button id="lang" class="ghost" type="button"
+                data-i18n="langSwitch" data-i18n-attr="title:langSwitchTitle;aria-label:langSwitchTitle">EN</button>
+        <button id="ui-theme" class="ghost" type="button" data-i18n-attr="title:themeTitle"
+                title="Тема интерфейса"><span id="ui-theme-label">Светлая тема</span></button>
+      </div>
     </div>
 
     <textarea id="text" placeholder="Вставьте сюда текст выступления…" spellcheck="false"
-              aria-label="Текст выступления"></textarea>
+              aria-label="Текст выступления"
+              data-i18n-attr="placeholder:textPlaceholder;aria-label:textAria"></textarea>
 
     <div class="toolbar" id="marks">
-      <button type="button" data-mark="|" title="Знак вдоха: прокрутка не останавливается">Вдох&nbsp;<b>|</b></button>
-      <button type="button" data-mark="||" title="Остановка: суфлёр встанет и подождёт клика">Остановка&nbsp;<b>||</b></button>
-      <button type="button" id="auto-pauses">Расставить вдохи автоматически</button>
-      <button type="button" id="typograf" title="Кавычки-ёлочки, тире, чистка лишних пробелов">Типограф</button>
-      <button type="button" id="strip-pauses">Убрать все паузы</button>
+      <button type="button" data-mark="|" title="Знак вдоха: прокрутка не останавливается"
+              data-i18n-html="markBreathHtml" data-i18n-attr="title:markBreathTitle">Вдох&nbsp;<b>|</b></button>
+      <button type="button" data-mark="||" title="Остановка: суфлёр встанет и подождёт клика"
+              data-i18n-html="markStopHtml" data-i18n-attr="title:markStopTitle">Остановка&nbsp;<b>||</b></button>
+      <button type="button" id="auto-pauses" data-i18n="autoPauses">Расставить вдохи автоматически</button>
+      <button type="button" id="typograf" title="Кавычки, тире, чистка лишних пробелов"
+              data-i18n="typograf" data-i18n-attr="title:typografTitle">Типограф</button>
+      <button type="button" id="strip-pauses" data-i18n="stripPauses">Убрать все паузы</button>
       <span id="tool-note" role="status" aria-live="polite" hidden></span>
     </div>
 
@@ -38,63 +52,63 @@
       <span id="stat-words">0 слов</span>
       <span id="stat-time">≈ 0 сек</span>
       <span id="stat-pauses" hidden></span>
-      <button id="clear" class="link" type="button">Очистить</button>
+      <button id="clear" class="link" type="button" data-i18n="clear">Очистить</button>
     </div>
 
     <div class="preview-box">
-      <div class="preview-label">Предпросмотр</div>
+      <div class="preview-label" data-i18n="preview">Предпросмотр</div>
       <div id="preview-strip"><div id="preview-text">Пример строки текста</div></div>
     </div>
 
     <div class="controls">
       <label class="ctl">
-        <span class="ctl-head">Размер букв <b id="val-size">64 px</b></span>
+        <span class="ctl-head"><span data-i18n="size">Размер букв</span> <b id="val-size">64 px</b></span>
         <input type="range" id="size" min="28" max="140" step="2" value="64">
       </label>
 
       <label class="ctl">
-        <span class="ctl-head">Скорость <b id="val-speed">18 строк/мин</b></span>
+        <span class="ctl-head"><span data-i18n="speed">Скорость</span> <b id="val-speed">18 строк/мин</b></span>
         <!-- границы задаёт app.js (SPEED_MIN/SPEED_MAX) -->
         <input type="range" id="speed" step="1" value="18">
       </label>
 
       <label class="ctl">
-        <span class="ctl-head">Ширина текста <b id="val-width">70 %</b></span>
+        <span class="ctl-head"><span data-i18n="width">Ширина текста</span> <b id="val-width">70 %</b></span>
         <input type="range" id="width" min="35" max="100" step="1" value="70">
       </label>
 
       <div class="ctl">
-        <span class="ctl-head">Экран суфлёра</span>
-        <div class="segmented" id="stage" role="group" aria-label="Тема экрана суфлёра">
-          <button type="button" data-stage="dark" class="on">Тёмный</button>
-          <button type="button" data-stage="light">Светлый</button>
-          <button type="button" data-stage="yellow">Жёлтый</button>
+        <span class="ctl-head" data-i18n="stage">Экран суфлёра</span>
+        <div class="segmented" id="stage" role="group" aria-label="Тема экрана суфлёра" data-i18n-attr="aria-label:stageAria">
+          <button type="button" data-stage="dark" class="on" data-i18n="stageDark">Тёмный</button>
+          <button type="button" data-stage="light" data-i18n="stageLight">Светлый</button>
+          <button type="button" data-stage="yellow" data-i18n="stageYellow">Жёлтый</button>
         </div>
       </div>
 
       <div class="ctl">
-        <span class="ctl-head">Выравнивание</span>
-        <div class="segmented" id="align" role="group" aria-label="Выравнивание текста">
-          <button type="button" data-align="left" class="on">Слева</button>
-          <button type="button" data-align="center">По центру</button>
+        <span class="ctl-head" data-i18n="align">Выравнивание</span>
+        <div class="segmented" id="align" role="group" aria-label="Выравнивание текста" data-i18n-attr="aria-label:alignAria">
+          <button type="button" data-align="left" class="on" data-i18n="alignLeft">Слева</button>
+          <button type="button" data-align="center" data-i18n="alignCenter">По центру</button>
         </div>
       </div>
 
       <div class="ctl switches">
-        <label class="switch"><input type="checkbox" id="mirror"><span>Зеркальное отражение</span></label>
-        <label class="switch"><input type="checkbox" id="countdown-on" checked><span>Отсчёт 3-2-1 перед стартом</span></label>
+        <label class="switch"><input type="checkbox" id="mirror"><span data-i18n="mirror">Зеркальное отражение</span></label>
+        <label class="switch"><input type="checkbox" id="countdown-on" checked><span data-i18n="countdown">Отсчёт 3-2-1 перед стартом</span></label>
       </div>
     </div>
 
-    <button id="start" class="primary" type="button">Запустить</button>
-    <button id="resume" class="secondary" type="button" hidden>Продолжить с места остановки</button>
+    <button id="start" class="primary" type="button" data-i18n="start">Запустить</button>
+    <button id="resume" class="secondary" type="button" data-i18n="resume" hidden>Продолжить с места остановки</button>
 
     <ul class="legend">
-      <li><b>|</b> в тексте — знак вдоха, прокрутка идёт дальше · <b>||</b> — остановка до клика</li>
-      <li><b>Клик мыши</b>, <b>тап</b> или <b>пробел</b> — пауза и продолжение</li>
-      <li><b>Колесо мыши</b> или <b>свайп</b> — скорость (на паузе — перемотка текста)</li>
-      <li><b>↑ ↓</b> — скорость · <b>PgUp/PgDn</b> — перемотка · <b>Home</b> — в начало</li>
-      <li><b>Esc</b> или <b>✕</b> в углу — выход в настройки</li>
+      <li data-i18n-html="legend1Html"><b>|</b> в тексте — знак вдоха, прокрутка идёт дальше · <b>||</b> — остановка до клика</li>
+      <li data-i18n-html="legend2Html"><b>Клик мыши</b>, <b>тап</b> или <b>пробел</b> — пауза и продолжение</li>
+      <li data-i18n-html="legend3Html"><b>Колесо мыши</b> или <b>свайп</b> — скорость (на паузе — перемотка текста)</li>
+      <li data-i18n-html="legend4Html"><b>↑ ↓</b> — скорость · <b>PgUp/PgDn</b> — перемотка · <b>Home</b> — в начало</li>
+      <li data-i18n-html="legend5Html"><b>Esc</b> или <b>✕</b> в углу — выход в настройки</li>
     </ul>
   </div>
 </main>
@@ -104,7 +118,8 @@
   <div id="viewer"><div id="track" class="reading"></div></div>
   <div id="marker" aria-hidden="true"><i class="arrow left"></i><i class="line"></i><i class="arrow right"></i></div>
   <div id="progress" aria-hidden="true"><i></i></div>
-  <button id="exit" type="button" aria-label="Выход в настройки" title="Выход (Esc)">✕</button>
+  <button id="exit" type="button" aria-label="Выход в настройки" title="Выход (Esc)"
+          data-i18n-attr="aria-label:exit;title:exitTitle">✕</button>
   <div id="paused-badge" role="status" aria-live="polite" hidden>пауза</div>
   <div id="hud" role="status" aria-live="polite" hidden></div>
   <div id="keyhelp">клик — пауза · колесо — скорость · Esc — выход</div>
@@ -115,6 +130,7 @@
 <div id="measurer" class="reading" aria-hidden="true"></div>
 
 <script src="text-tools.js"></script>
+<script src="i18n.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

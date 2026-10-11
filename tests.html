@@ -29,10 +29,12 @@
 </div>
 
 <script src="text-tools.js"></script>
+<script src="i18n.js"></script>
 <script>
 (function () {
   'use strict';
   var T = window.TextTools;
+  var I18n = window.I18n;
   var NBSP = '\u00A0';
   var sections = [];
   var current = null;
@@ -96,6 +98,44 @@
   eq('1 строка/мин', T.speedLabel(1), '1 строка/мин');
   eq('22 строки/мин', T.speedLabel(22), '22 строки/мин');
   eq('120 строк/мин', T.speedLabel(120), '120 строк/мин');
+
+  /* ---------- английский ---------- */
+  section('Английский: форматирование и типограф');
+  eq('en: секунды', T.formatTime(42, 'en'), '42 sec');
+  eq('en: минуты', T.formatTime(65, 'en'), '1 min 05 sec');
+  eq('en: часы', T.formatTime(5400, 'en'), '1 h 30 min');
+  eq('en: 1 line/min', T.speedLabel(1, 'en'), '1 line/min');
+  eq('en: 18 lines/min', T.speedLabel(18, 'en'), '18 lines/min');
+  eq('язык текста: русский', T.detectTextLang('Привет, мир'), 'ru');
+  eq('язык текста: английский', T.detectTextLang('Hello, world'), 'en');
+  eq('язык текста: без букв — русский', T.detectTextLang('123 — 456'), 'ru');
+  eq('en: кавычки', T.typograf('He said "hello" to them.'), 'He said “hello” to them.');
+  eq('en: апостроф', T.typograf("Don't stop, it's fine."), 'Don’t stop, it’s fine.');
+  eq('en: одинарные кавычки', T.typograf("She said 'yes' twice."), 'She said ‘yes’ twice.');
+  eq('en: без русских NBSP', T.typograf('It is a test - really.'), 'It is a test — really.');
+  eq('en: пробелы внутри кавычек', T.typograf('He said " hi " once.'), 'He said “hi” once.');
+  var onceEn = T.typograf('She said "don\'t"  - and left ...');
+  eq('en: идемпотентность', T.typograf(onceEn), onceEn);
+  eq('en: сокращения пропускаются', T.autoPauses('Ask Dr. Smith today. Then go.'), 'Ask Dr. Smith today. | Then go.');
+  eq('en: кавычка после точки', T.autoPauses('He said “yes.” Then left.'), 'He said “yes.” | Then left.');
+
+  /* ---------- словари интерфейса ---------- */
+  section('Словари RU/EN');
+  var ruKeys = Object.keys(I18n.dict.ru).sort().join(',');
+  var enKeys = Object.keys(I18n.dict.en).sort().join(',');
+  eq('ключи словарей совпадают', enKeys, ruKeys);
+  var cyrInEn = Object.keys(I18n.dict.en).filter(function (k) {
+    // подсказка кнопки языка — единственная строка, нарочно написанная на другом языке
+    return k !== 'langSwitchTitle' && /[а-яё]/i.test(String(I18n.dict.en[k]));
+  });
+  eq('в английском словаре нет кириллицы', cyrInEn.join(','), '');
+  eq('подстановка параметров', I18n.t('en', 'noteAdded', { count: '3 breaths' }), 'added 3 breaths');
+  eq('ru: 1 слово', I18n.count('ru', 1, 'words'), '1 слово');
+  eq('ru: 5 слов', I18n.count('ru', 5, 'words'), '5 слов');
+  eq('en: 1 word', I18n.count('en', 1, 'words'), '1 word');
+  eq('en: 2 words', I18n.count('en', 2, 'words'), '2 words');
+  eq('en: 0 words', I18n.count('en', 0, 'words'), '0 words');
+  eq('неизвестный язык — русский', I18n.t('de', 'start'), 'Запустить');
 
   /* ---------- вывод ---------- */
   var out = document.getElementById('out');

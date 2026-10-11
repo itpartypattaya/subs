@@ -13,7 +13,7 @@
  * старый кэш у всех.
  */
 
-var VERSION = 'v1';
+var VERSION = 'v2'; // v2: в ASSETS добавлен i18n.js
 var CACHE = 'teleprompter-' + VERSION;
 var NETWORK_TIMEOUT = 2500;  // после этого отдаём кэш, если он есть
 var NETWORK_GIVEUP = 15000;  // а после этого прекращаем ждать сеть совсем
@@ -22,7 +22,8 @@ var ASSETS = [
   './index.html',
   './style.css',
   './app.js',
-  './text-tools.js'
+  './text-tools.js',
+  './i18n.js'
 ];
 
 // Ключ кэша — путь без query: иначе ?v=2 и ?fresh=1 плодили бы копии

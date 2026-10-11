@@ -97,6 +97,9 @@ h1 {
   gap: 16px;
 }
 
+/* язык и тема рядом, не переносятся под заголовок поодиночке */
+.head-actions { display: flex; flex: none; gap: 8px; }
+
 .ghost {
   flex: none;
   padding: 9px 14px;
@@ -151,10 +154,15 @@ h1 {
 .toolbar button b { color: var(--accent); font-weight: 700; }
 #tool-note { align-self: center; color: var(--accent); font-size: 14px; }
 
+/* На телефоне четыре счётчика не помещаются в строку: раньше flex сжимал
+   каждый и переносил слова внутри («35 / слов»). Теперь переносится строка
+   целиком, а сами счётчики неразрывны. */
 .statsline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 6px 18px;
+  white-space: nowrap;
   margin: 14px 2px 22px;
   color: var(--muted);
   font-size: 14px;
@@ -536,6 +544,10 @@ body.align-center #track { text-align: center; }
 
 @media (max-width: 640px) {
   #setup { padding: 24px 14px 48px; }
+  /* две кнопки рядом с заголовком сжимали его в узкую колонку —
+     на телефоне они переезжают строкой над ним, к правому краю */
+  .head { flex-wrap: wrap; gap: 12px; }
+  .head-actions { order: -1; width: 100%; justify-content: flex-end; }
   h1 { font-size: 25px; }
   #preview-strip { height: 96px; }
 }
